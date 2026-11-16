@@ -1,0 +1,131 @@
+========================================================================
+           PONTOFÁCIL PERNAMBUCANAS - GUIA DE USO PASSO A PASSO
+========================================================================
+
+Olá! Este guia foi feito para você utilizar o PontoFácil Pernambucanas no
+seu celular ou computador com total facilidade e segurança.
+
+------------------------------------------------------------------------
+1. PRIMEIRO ACESSO E CONFIGURAÇÃO DE CREDENCIAIS
+------------------------------------------------------------------------
+- Ao abrir o app pela primeira vez, uma tela irá solicitar o seu Login (CPF
+  ou Matrícula) e sua Senha de acesso do Portal Nossa Gente Pernambucanas.
+- Digite seu CPF (pode ser com ou sem pontos, o app reconhece ambos) e sua
+  senha.
+- Toque no ícone de "Olho" para conferir se digitou a senha corretamente
+  (cuidado com letras maiúsculas/minúsculas).
+- Clique em "Salvar Credenciais".
+- As suas credenciais ficam salvas apenas no seu aparelho e podem ser
+  alteradas a qualquer momento tocando no ícone de engrenagem (Configurações).
+
+------------------------------------------------------------------------
+2. TESTAR A CONEXÃO COM O PORTAL REAL (DRY-RUN)
+------------------------------------------------------------------------
+- Antes de registrar o primeiro ponto oficial, você pode clicar no botão:
+  "Testar Portal Real" (com ícone de escudo amarelo).
+- O app fará uma conexão direta com os servidores da Pernambucanas LG Cloud,
+  testará o formulário e confirmará se seu login e senha foram aceitos.
+- IMPORTANTE: O teste de conexão NÃO bate o ponto no RH! Ele apenas valida
+  se tudo está funcionando para você não ter surpresas.
+
+------------------------------------------------------------------------
+3. COMO REGISTRAR O PONTO NO DIA A DIA (TELA OFICIAL + BOTÃO ✕ NO CANTO)
+------------------------------------------------------------------------
+- Para bater o ponto, toque no botão amarelo principal: "INICIAR" ou "Marcar ponto".
+- O app abre a TELA ORIGINAL do Portal Nossa Gente da Pernambucanas na sua tela,
+  já preenchendo automaticamente o seu CPF e senha ("ver tudo ao vivo").
+- Na tela oficial, clique no botão "Marcar ponto".
+- Em seguida, clique no BOTÃO (✕) DESTACADO NO CANTO DA TELA ("Salvar Ponto").
+- O HORÁRIO EXATO É GRAVADO NO SEGUNDO EM QUE VOCÊ CLICA NO ✕!
+  (Sem depender de lentidão de robô ou instabilidade de rede).
+- Logo em seguida, subirá a confirmação com o horário exato e a pergunta:
+  "É horário de almoço? [Sim] [Não]"
+
+- Se você responder NÃO:
+  O aviso fecha e seu ponto fica gravado no seu histórico diário.
+
+- Se você responder SIM:
+  O cronômetro regressivo de 1 HORA (60 min ou 59 min configurável) inicia
+  imediatamente! O celular apita o som de notificação e vibra mesmo com o celular
+  bloqueado ou o app em segundo plano.
+
+------------------------------------------------------------------------
+4. O CRONÔMETRO DE ALMOÇO (1 HORA) E O ALARME NO CELULAR
+------------------------------------------------------------------------
+- Enquanto você almoça, o cronômetro permanece visível no app e também na
+  barra de notificações do seu celular (mesmo se você sair do site ou
+  fechar a tela).
+- Ao atingir exatamente 59 minutos (00:00 restantes), o app dispara um
+  alarme sonoro e exibe uma notificação perguntando:
+  "Deseja iniciar o app novamente e bater o ponto de volta do almoço?"
+- Ao clicar em "Iniciar", o app executa o processo de bater o ponto da
+  volta do almoço automaticamente!
+
+------------------------------------------------------------------------
+5. PAINEL DE BANCO DE HORAS
+------------------------------------------------------------------------
+- Toque na aba "Banco de Horas" no topo do app.
+- Ali você pode configurar a sua jornada de trabalho (por exemplo, 8 horas
+  por dia, ou 8h48min) e os dias da semana em que você trabalha.
+- Se você trabalhar em um dia de folga (como sábado ou domingo), o app
+  calcula 100% das horas trabalhadas como saldo positivo de banco de horas.
+- O painel exibe um gráfico e cartões com saldo do dia e saldo acumulado.
+
+------------------------------------------------------------------------
+6. PERSONALIZAÇÃO DE CORES, FUNDO MATRIX E SOM DO ALARME
+------------------------------------------------------------------------
+- Toque no ícone de Engrenagem (Configurações) no canto superior direito:
+  * Escolha a cor do tema: Amarelo, Verde, Vermelho, Azul ou Roxo.
+  * O fundo animado Matrix mudará automaticamente para a cor que você
+    escolher! Você também pode ajustar a intensidade ou desativá-lo.
+  * Escolha a música/som do alarme entre 5 estilos diferentes (Chime,
+    Digital, Suave, Fanfarra ou Pulso).
+  * Alterne entre Tema Escuro e Tema Claro.
+
+------------------------------------------------------------------------
+7. DICA PARA O CELULAR (INSTALAR COMO APLICATIVO)
+------------------------------------------------------------------------
+- Para abrir o PontoFácil como um aplicativo comum direto da tela inicial:
+  * No Google Chrome do Android: clique nos 3 pontinhos e selecione
+    "Instalar aplicativo" ou "Adicionar à tela inicial".
+  * No Safari do iPhone: clique no botão Compartilhar (quadrado com seta)
+    e escolha "Adicionar à Tela de Início".
+- Ao abrir pela primeira vez, permita as notificações para acompanhar o
+  tempo do almoço na barra de status do celular!
+
+------------------------------------------------------------------------
+8. MODO PESSOA FÍSICA COM FOTOS AO VIVO DA TELA
+------------------------------------------------------------------------
+- O aplicativo conta com o modo opcional "Pessoa Física":
+  * O app abre um navegador real, digita o seu login e senha tecla por
+    tecla e clica nos botões oficiais.
+  * O app tira fotos reais da tela em cada etapa:
+    1. Página inicial do portal da Pernambucanas
+    2. Campos preenchidos com seu login e senha
+    3. Resposta oficial (mostrando a tela de erro ou a confirmação)
+  * Para ver o navegador em ação a qualquer momento, clique no botão:
+    "Ver Navegador em Ação (Fotos da Tela)".
+  * Você poderá alternar entre as abas das fotos e clicar em "Ampliar Foto"
+    para ver a tela em tamanho real!
+  * Caso prefira o modo mais rápido, você pode alternar para o "Modo Direto
+    HTTP" no botão de status ou nas configurações.
+
+------------------------------------------------------------------------
+9. VERIFICAÇÃO DE PONTOS BATIDOS NO PORTAL (PESSOA FÍSICA)
+------------------------------------------------------------------------
+- Quando o quadro "Marcações do dia" estiver vazio (no início do dia), um botão
+  destacado estará disponível:
+  "Verificar se bati ponto hoje no portal" (ou "Verificar portal" no topo do cartão).
+- Ao clicar nele:
+  1. O app abre o navegador oficial como Pessoa Física.
+  2. Acessa o Portal Nossa Gente Pernambucanas com suas credenciais.
+  3. Consulta especificamente o widget "Marcações do dia" da empresa.
+  4. Tira uma foto da tela do painel e identifica todas as batidas já feitas
+     hoje (como 07:39, 11:38).
+  5. Sincroniza automaticamente essas batidas no seu app com o ponto verde
+     "Confirmado (Oficial)" e exibe a foto do portal.
+  6. IMPORTANTE: Ele NÃO bate nenhum ponto novo, apenas consulta e traz suas
+     marcações para você conferir com total segurança!
+
+Bom trabalho e aproveite o PontoFácil Pernambucanas!
+========================================================================

@@ -1,0 +1,472 @@
+/**
+ * Service Worker for PontoFácil Pernambucanas
+ * Handles persistent mobile notification bar alerts, TimestampTrigger scheduling,
+ * and background recovery when the app is minimized, switched, or locked.
+ */
+
+const STATE_CACHE = 'pontofacil-state-v1';
+const STATE_KEY = '/__lunch_timer_state__.json';
+
+let activeLunchTimeout = null;
+let activeLunchInterval = null;
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.clients.claim().then(() => checkPersistedLunchTimer())
+  );
+});
+
+async function saveLunchState(state) {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    await cache.put(
+      STATE_KEY,
+      new Response(JSON.stringify(state), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  } catch (err) {
+    // Ignore cache storage failures in restricted contexts
+  }
+}
+
+async function loadLunchState() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const res = await cache.match(STATE_KEY);
+    if (!res) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function deleteLunchState() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    await cache.delete(STATE_KEY);
+  } catch {
+    // Ignore
+  }
+}
+
+function stopInternalTimers() {
+  if (activeLunchTimeout) {
+    clearTimeout(activeLunchTimeout);
+    activeLunchTimeout = null;
+  }
+  if (activeLunchInterval) {
+    clearInterval(activeLunchInterval);
+    activeLunchInterval = null;
+  }
+}
+
+async function fireFinalAlarmNotification(state) {
+  const durationMinutes = state?.durationMinutes || 60;
+  const durationLabel = durationMinutes === 60 ? '1 hora' : `${durationMinutes} min`;
+
+  // Mark alarm as fired in persisted state so we don't duplicate
+  if (state && !state.alarmFired) {
+    await saveLunchState({ ...state, alarmFired: true });
+  }
+
+  // Close countdown notification so the loud final alarm stands out clearly
+  try {
+    const countdownNotes = await self.registration.getNotifications({ tag: 'ponto-lunch-countdown' });
+    countdownNotes.forEach((n) => n.close());
+  } catch {}
+
+  try {
+    await self.registration.showNotification(`⏰ FIM DO ALMOÇO (${durationLabel})!`, {
+      body: 'Seu horário de descanso terminou! Toque aqui para registrar o ponto de retorno agora.',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: 'ponto-lunch-alarm',
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: [500, 200, 500, 200, 800, 200, 500],
+      data: { action: 'bater_ponto', url: '/?action=bater_ponto' },
+      actions: [
+        { action: 'bater_ponto', title: '▶️ Bater Ponto Agora' },
+        { action: 'abrir', title: 'Abrir App' },
+      ],
+    });
+  } catch {}
+
+  // Notify any open/backgrounded app windows so audio + modal trigger immediately
+  try {
+    const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clientList) {
+      client.postMessage({
+        type: 'LUNCH_ALARM_FIRED',
+        targetEpoch: state?.targetEpoch || Date.now(),
+      });
+    }
+  } catch {}
+}
+
+async function showOngoingCountdownNotification(state) {
+  const remainingMs = (state?.targetEpoch || 0) - Date.now();
+  if (remainingMs <= 0) {
+    await fireFinalAlarmNotification(state);
+    return;
+  }
+
+  const remainingMins = Math.max(1, Math.ceil(remainingMs / 60000));
+  const label =
+    remainingMs < 60000
+      ? `menos de 1 min (${Math.ceil(remainingMs / 1000)}s)`
+      : `${remainingMins} min restantes`;
+
+  try {
+    await self.registration.showNotification(`🥪 Almoço Ativo: ${label}`, {
+      body: `Retorno previsto às ${state.expectedEndTimeStr || '--:--'} • Alarme automático ativo`,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: 'ponto-lunch-countdown',
+      renotify: false,
+      silent: true,
+      requireInteraction: true,
+      data: { action: 'abrir', url: '/' },
+      actions: [
+        { action: 'bater_ponto', title: 'Bater Retorno' },
+        { action: 'abrir', title: 'Abrir App' },
+      ],
+    });
+  } catch {}
+}
+
+async function scheduleNativeTriggerIfSupported(state) {
+  try {
+    if (
+      typeof self.TimestampTrigger !== 'undefined' &&
+      self.Notification &&
+      'showTrigger' in self.Notification.prototype
+    ) {
+      // Cancel previous triggered alarm notifications
+      try {
+        const existing = await self.registration.getNotifications({
+          tag: 'ponto-lunch-alarm',
+          includeTriggered: true,
+        });
+        existing.forEach((n) => n.close());
+      } catch {}
+
+      const durationMinutes = state.durationMinutes || 60;
+      const durationLabel = durationMinutes === 60 ? '1 hora' : `${durationMinutes} min`;
+      const triggerTime = Math.max(Date.now() + 1000, state.targetEpoch);
+
+      await self.registration.showNotification(`⏰ FIM DO ALMOÇO (${durationLabel})!`, {
+        body: 'Seu horário de descanso terminou! Toque aqui para registrar o ponto de retorno agora.',
+        icon: '/icon.svg',
+        badge: '/icon.svg',
+        tag: 'ponto-lunch-alarm',
+        renotify: true,
+        requireInteraction: true,
+        silent: false,
+        vibrate: [500, 200, 500, 200, 800, 200, 500],
+        showTrigger: new self.TimestampTrigger(triggerTime),
+        data: { action: 'bater_ponto', url: '/?action=bater_ponto' },
+        actions: [
+          { action: 'bater_ponto', title: '▶️ Bater Ponto Agora' },
+          { action: 'abrir', title: 'Abrir App' },
+        ],
+      });
+    }
+  } catch {
+    // TimestampTrigger not supported on this browser — handled by SW timers & wake-up checks
+  }
+}
+
+async function startLunchNotificationCycle(data) {
+  stopInternalTimers();
+
+  const { startEpoch, durationMinutes = 60, expectedEndTimeStr } = data;
+  const targetEpoch = startEpoch + durationMinutes * 60 * 1000;
+  const state = {
+    startEpoch,
+    durationMinutes,
+    targetEpoch,
+    expectedEndTimeStr: expectedEndTimeStr || '--:--',
+    alarmFired: false,
+  };
+
+  await saveLunchState(state);
+  await scheduleNativeTriggerIfSupported(state);
+  await showOngoingCountdownNotification(state);
+
+  const remainingMs = Math.max(0, targetEpoch - Date.now());
+  if (remainingMs <= 0) {
+    await fireFinalAlarmNotification(state);
+    return;
+  }
+
+  // Exact target timeout
+  activeLunchTimeout = setTimeout(async () => {
+    stopInternalTimers();
+    const latest = (await loadLunchState()) || state;
+    if (!latest.alarmFired) {
+      await fireFinalAlarmNotification(latest);
+    }
+  }, remainingMs);
+
+  // Update mobile notification bar every 60s while SW stays awake
+  activeLunchInterval = setInterval(async () => {
+    const latest = await loadLunchState();
+    if (!latest || latest.alarmFired) {
+      stopInternalTimers();
+      return;
+    }
+    if (Date.now() >= latest.targetEpoch) {
+      stopInternalTimers();
+      await fireFinalAlarmNotification(latest);
+    } else {
+      await showOngoingCountdownNotification(latest);
+    }
+  }, 60000);
+}
+
+async function checkPersistedLunchTimer() {
+  const state = await loadLunchState();
+  if (!state || state.alarmFired) return;
+
+  const remainingMs = state.targetEpoch - Date.now();
+  if (remainingMs <= 0) {
+    stopInternalTimers();
+    await fireFinalAlarmNotification(state);
+  } else if (!activeLunchTimeout) {
+    // Re-arm SW timers if SW restarted
+    activeLunchTimeout = setTimeout(async () => {
+      stopInternalTimers();
+      const latest = (await loadLunchState()) || state;
+      if (!latest.alarmFired) {
+        await fireFinalAlarmNotification(latest);
+      }
+    }, remainingMs);
+  }
+}
+
+async function clearLunchNotification() {
+  stopInternalTimers();
+  await deleteLunchState();
+
+  const tags = ['ponto-lunch-countdown', 'ponto-lunch-alarm'];
+  for (const tag of tags) {
+    try {
+      const notifications = await self.registration.getNotifications({ tag, includeTriggered: true });
+      notifications.forEach((n) => n.close());
+    } catch {
+      try {
+        const notifications = await self.registration.getNotifications({ tag });
+        notifications.forEach((n) => n.close());
+      } catch {}
+    }
+  }
+}
+
+const WIDGET_DATA_KEY = '/widgets/today-punches-data.json';
+
+async function saveWidgetData(payload) {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    await cache.put(
+      WIDGET_DATA_KEY,
+      new Response(JSON.stringify(payload), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  } catch {}
+}
+
+async function loadWidgetData() {
+  try {
+    const cache = await caches.open(STATE_CACHE);
+    const res = await cache.match(WIDGET_DATA_KEY);
+    if (!res) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function updateAdaptiveCardWidget(payload) {
+  try {
+    if (self.widgets && typeof self.widgets.updateByTag === 'function') {
+      const tplRes = await fetch('/widgets/today-punches-template.json').catch(() => null);
+      const template = tplRes && tplRes.ok ? await tplRes.text() : undefined;
+      await self.widgets.updateByTag('ponto-hoje', {
+        ...(template ? { template } : {}),
+        data: JSON.stringify(payload),
+      });
+    }
+  } catch {}
+}
+
+async function syncTodayPunchWidget(payload, pinned) {
+  if (!payload) return;
+  await saveWidgetData(payload);
+  await updateAdaptiveCardWidget(payload);
+
+  if (pinned) {
+    try {
+      await self.registration.showNotification(payload.notificationTitle || '📋 PontoFácil • Marcações de Hoje', {
+        body: payload.notificationBody || 'Acompanhe suas marcações do dia em tempo real.',
+        icon: '/assets/aistudio/image_3b45cbb0.png',
+        badge: '/icon.svg',
+        tag: 'ponto-widget-hoje',
+        renotify: false,
+        silent: true,
+        requireInteraction: true,
+        data: { action: 'abrir_widget', url: '/?tab=widget' },
+        actions: [
+          { action: 'bater_ponto', title: '▶️ Bater Ponto' },
+          { action: 'atualizar_widget', title: '🔄 Atualizar' },
+        ],
+      });
+    } catch {}
+  }
+}
+
+async function clearTodayPunchWidget() {
+  try {
+    const existing = await self.registration.getNotifications({ tag: 'ponto-widget-hoje' });
+    existing.forEach((n) => n.close());
+  } catch {}
+}
+
+// Serve cached widget JSON directly for PWA Adaptive Cards
+self.addEventListener('fetch', (event) => {
+  try {
+    const url = new URL(event.request.url);
+    if (url.pathname === WIDGET_DATA_KEY) {
+      event.respondWith(
+        loadWidgetData().then((cached) => {
+          if (cached) {
+            return new Response(JSON.stringify(cached), {
+              headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            });
+          }
+          return fetch(event.request);
+        })
+      );
+    }
+  } catch {}
+});
+
+// Handle incoming messages from the React app
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data) return;
+
+  if (data.type === 'START_LUNCH_TIMER') {
+    event.waitUntil(startLunchNotificationCycle(data));
+  } else if (data.type === 'FIRE_LUNCH_ALARM_NOW') {
+    event.waitUntil(
+      (async () => {
+        const existing = await loadLunchState();
+        if (existing && existing.alarmFired) return;
+        await fireFinalAlarmNotification(existing || { durationMinutes: data.durationMinutes || 60 });
+      })()
+    );
+  } else if (data.type === 'CHECK_LUNCH_TIMER') {
+    event.waitUntil(checkPersistedLunchTimer());
+  } else if (data.type === 'CLEAR_LUNCH_TIMER') {
+    event.waitUntil(clearLunchNotification());
+  } else if (data.type === 'SYNC_WIDGET_PUNCHES') {
+    event.waitUntil(syncTodayPunchWidget(data.payload, Boolean(data.pinned)));
+  } else if (data.type === 'CLEAR_WIDGET_PUNCHES') {
+    event.waitUntil(clearTodayPunchWidget());
+  } else if (data.type === 'TEST_NOTIFICATION') {
+    event.waitUntil(
+      self.registration.showNotification('🔔 PontoFácil Pernambucanas', {
+        body: 'Notificação ativa na barra do celular! O contador e o alarme de almoço aparecerão aqui.',
+        icon: '/icon.svg',
+        badge: '/icon.svg',
+        tag: 'ponto-test',
+        renotify: true,
+        silent: false,
+        vibrate: [250, 120, 250],
+        data: { action: 'abrir', url: '/' },
+        actions: [{ action: 'abrir', title: 'Abrir App' }],
+      })
+    );
+  }
+});
+
+// Edge / Chromium PWA Widgets lifecycle
+self.addEventListener('widgetinstall', (event) => {
+  event.waitUntil(
+    loadWidgetData().then((payload) => {
+      if (payload) return updateAdaptiveCardWidget(payload);
+    })
+  );
+});
+
+self.addEventListener('widgetclick', (event) => {
+  if (event.action === 'bater_ponto') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          if ('focus' in client) {
+            client.postMessage({ type: 'NOTIFICATION_ACTION', action: 'bater_ponto' });
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) return self.clients.openWindow('/?action=bater_ponto');
+      })
+    );
+  }
+});
+
+// Opportunistic check when SW wakes up for background sync / periodic sync
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'ponto-lunch-check') {
+    event.waitUntil(checkPersistedLunchTimer());
+  }
+});
+
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'ponto-lunch-check') {
+    event.waitUntil(checkPersistedLunchTimer());
+  }
+});
+
+// User clicked on notification or action button
+self.addEventListener('notificationclick', (event) => {
+  const action = event.action || (event.notification.data && event.notification.data.action);
+
+  if (action === 'atualizar_widget') {
+    event.waitUntil(
+      loadWidgetData().then((payload) => syncTodayPunchWidget(payload, true))
+    );
+    return;
+  }
+
+  event.notification.close();
+  const targetUrl =
+    action === 'bater_ponto'
+      ? '/?action=bater_ponto'
+      : action === 'abrir_widget'
+        ? '/?tab=widget'
+        : '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.postMessage({ type: 'NOTIFICATION_ACTION', action: action || 'abrir' });
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+

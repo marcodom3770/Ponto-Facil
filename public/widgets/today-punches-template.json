@@ -1,0 +1,77 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "ColumnSet",
+      "columns": [
+        {
+          "type": "Column",
+          "width": "stretch",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "PERNAMBUCANAS • PONTOFÁCIL",
+              "size": "Small",
+              "weight": "Bolder",
+              "color": "Accent"
+            },
+            {
+              "type": "TextBlock",
+              "text": "Marcações de Hoje (${punchCount})",
+              "size": "Medium",
+              "weight": "Bolder",
+              "spacing": "None"
+            }
+          ]
+        },
+        {
+          "type": "Column",
+          "width": "auto",
+          "verticalContentAlignment": "Center",
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": "${workedText}",
+              "size": "Medium",
+              "weight": "Bolder"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "${dateStr}",
+      "size": "Small",
+      "isSubtle": true,
+      "spacing": "None"
+    },
+    {
+      "type": "FactSet",
+      "spacing": "Medium",
+      "facts": [
+        {
+          "title": "Batidas:",
+          "value": "${punchListText}"
+        },
+        {
+          "title": "Próxima:",
+          "value": "${nextPunchLabel}"
+        },
+        {
+          "title": "Saída Est.:",
+          "value": "${predictedExitTimeStr}"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Execute",
+      "title": "Bater Ponto Agora",
+      "verb": "bater_ponto"
+    }
+  ]
+}

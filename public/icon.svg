@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="100%" stop-color="#171717"/>
+    </linearGradient>
+    <linearGradient id="yellowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#262626" stroke-width="4"/>
+  
+  <!-- Clock Outer Ring -->
+  <circle cx="256" cy="220" r="140" fill="#0f0f0f" stroke="#eab308" stroke-width="14"/>
+  
+  <!-- Clock Marks -->
+  <line x1="256" y1="100" x2="256" y2="120" stroke="#fde047" stroke-width="8" stroke-linecap="round"/>
+  <line x1="256" y1="320" x2="256" y2="340" stroke="#fde047" stroke-width="8" stroke-linecap="round"/>
+  <line x1="136" y1="220" x2="156" y2="220" stroke="#fde047" stroke-width="8" stroke-linecap="round"/>
+  <line x1="356" y1="220" x2="376" y2="220" stroke="#fde047" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Clock Hands pointing to 12:59 -->
+  <line x1="256" y1="220" x2="256" y2="135" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="220" x2="230" y2="140" stroke="#fde047" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="256" cy="220" r="14" fill="#fde047"/>
+  
+  <!-- Digital Box & Text -->
+  <rect x="96" y="390" width="320" height="74" rx="20" fill="url(#yellowGrad)"/>
+  <text x="256" y="440" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#000000" text-anchor="middle" letter-spacing="1">BATER PONTO</text>
+</svg>

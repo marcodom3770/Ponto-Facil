@@ -1,0 +1,107 @@
+{
+  "id": "/",
+  "name": "PontoFácil Pernambucanas",
+  "short_name": "PontoFácil",
+  "description": "Automação de ponto no Portal Nossa Gente com widgets no celular, alarme de almoço e banco de horas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090a0d",
+  "theme_color": "#090a0d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/aistudio/image_3b45cbb0.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/aistudio/image_3b45cbb0.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Bater Ponto Agora",
+      "short_name": "Bater Ponto",
+      "description": "Inicia o registro de ponto no Portal Nossa Gente imediatamente",
+      "url": "/?action=bater_ponto",
+      "icons": [
+        {
+          "src": "/assets/aistudio/image_3b45cbb0.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Ver Widget & Marcações",
+      "short_name": "Widget Hoje",
+      "description": "Abre o painel de widget no celular e as batidas do dia",
+      "url": "/?tab=widget",
+      "icons": [
+        {
+          "src": "/assets/aistudio/image_3b45cbb0.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Banco de Horas",
+      "short_name": "Banco Horas",
+      "description": "Consulta saldo acumulado e escala semanal",
+      "url": "/?tab=banco",
+      "icons": [
+        {
+          "src": "/assets/aistudio/image_3b45cbb0.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "widgets": [
+    {
+      "name": "Marcações de Hoje",
+      "short_name": "Ponto Hoje",
+      "description": "Mostra suas marcações do dia, horas trabalhadas e previsão de saída direto na tela.",
+      "tag": "ponto-hoje",
+      "template": "ponto-hoje-ac",
+      "ms_ac_template": "/widgets/today-punches-template.json",
+      "data": "/widgets/today-punches-data.json",
+      "type": "application/json",
+      "update": 900,
+      "multiple": false,
+      "screenshots": [
+        {
+          "src": "/assets/aistudio/image_3b45cbb0.png",
+          "sizes": "512x512",
+          "label": "Widget Marcações de Hoje"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/assets/aistudio/image_3b45cbb0.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

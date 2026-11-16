@@ -1,0 +1,12 @@
+{
+  "dateStr": "Hoje",
+  "updatedAt": "--:--",
+  "workedText": "00h 00m",
+  "expectedText": "08h 48m",
+  "progressPercent": 0,
+  "nextPunchLabel": "Entrada",
+  "predictedExitTimeStr": "--:--",
+  "punchCount": 0,
+  "punchListText": "Abra o PontoFácil para sincronizar suas marcações de hoje.",
+  "slots": []
+}
