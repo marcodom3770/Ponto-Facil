@@ -139,15 +139,61 @@ export function parseRawDateFromBrazilianLabel(label: string): string | null {
   return `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+export function calculateZeroSecondLunchTarget(
+  punchEpochMs: number,
+  durationMinutes: number
+): {
+  startMinuteEpoch: number;
+  targetEpoch: number;
+  expectedEndTimeStr: string;
+} {
+  const startDate = new Date(punchEpochMs);
+  startDate.setSeconds(0, 0);
+  const startMinuteEpoch = startDate.getTime();
+  const targetEpoch = startMinuteEpoch + durationMinutes * 60 * 1000;
+  return {
+    startMinuteEpoch,
+    targetEpoch,
+    expectedEndTimeStr: formatTime(new Date(targetEpoch)),
+  };
+}
+
+export function computeLunchEndTimeFromTimeStr(
+  timeStr: string,
+  durationMinutes: number
+): string {
+  const totalMinutes = (timeStringToMinutes(timeStr) + durationMinutes) % (24 * 60);
+  const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+  const mm = String(totalMinutes % 60).padStart(2, '0');
+  return `${hh}:${mm}:00`;
+}
+
 export function calculateRemainingSeconds(
   startEpochMs: number,
   durationMinutes: number,
-  currentEpochMs: number
+  currentEpochMs: number,
+  targetEpochMs?: number
 ): number {
-  const totalSeconds = durationMinutes * 60;
-  const elapsedSeconds = Math.floor((currentEpochMs - startEpochMs) / 1000);
-  const remaining = totalSeconds - elapsedSeconds;
-  return Math.max(0, remaining);
+  const target =
+    typeof targetEpochMs === 'number' && Number.isFinite(targetEpochMs)
+      ? targetEpochMs
+      : startEpochMs + durationMinutes * 60 * 1000;
+  const remainingMs = target - currentEpochMs;
+  if (remainingMs <= 0) return 0;
+  return Math.ceil(remainingMs / 1000);
+}
+
+export const PREVENTIVE_LUNCH_ALERT_SECONDS = 60;
+
+/**
+ * Returns true during the final minute (1..thresholdSeconds) before the target
+ * zero-second lunch return time so the user is warned ahead of residual seconds.
+ */
+export function shouldShowPreventiveLunchAlert(
+  remainingSeconds: number,
+  thresholdSeconds: number = PREVENTIVE_LUNCH_ALERT_SECONDS
+): boolean {
+  return remainingSeconds > 0 && remainingSeconds <= thresholdSeconds;
 }
 
 export function formatCountdown(secondsLeft: number): string {

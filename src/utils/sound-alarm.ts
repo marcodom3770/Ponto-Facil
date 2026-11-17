@@ -266,6 +266,41 @@ export function playPunchSuccessSound() {
   }
 }
 
+/**
+ * Plays a gentle 3-note preventive chime + short haptic vibration 1 minute
+ * before lunch ends so the user holds the phone ready before :00 hits.
+ */
+export function playPreventiveLunchChime() {
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    const notes = [698.46, 880, 1046.5]; // F5 -> A5 -> C6
+
+    notes.forEach((freq, idx) => {
+      const t = now + idx * 0.11;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.24, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+  } catch (err) {
+    console.warn('Preventive chime error:', err);
+  }
+
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate([140, 80, 140]);
+    } catch {}
+  }
+}
+
 // Play specific alarm sound preset
 export function playSoundPreset(soundId: AlarmSoundId = currentSoundId) {
   try {

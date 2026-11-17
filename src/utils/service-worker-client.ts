@@ -79,7 +79,8 @@ export async function requestMobileNotificationPermission(): Promise<MobileNotif
 export async function startMobileLunchNotification(
   startEpoch: number,
   durationMinutes: number,
-  expectedEndTimeStr: string
+  expectedEndTimeStr: string,
+  explicitTargetEpoch?: number
 ): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return false;
@@ -87,6 +88,11 @@ export async function startMobileLunchNotification(
   if (Notification.permission !== 'granted') {
     return false;
   }
+
+  const targetEpoch =
+    typeof explicitTargetEpoch === 'number' && Number.isFinite(explicitTargetEpoch)
+      ? explicitTargetEpoch
+      : startEpoch + durationMinutes * 60 * 1000;
 
   const reg = await getSWRegistration();
   if (reg) {
@@ -97,12 +103,12 @@ export async function startMobileLunchNotification(
         startEpoch,
         durationMinutes,
         expectedEndTimeStr,
+        targetEpoch,
       });
     }
 
     // Immediately show in the phone's notification bar even before SW finishes installing
     if (typeof reg.showNotification === 'function') {
-      const targetEpoch = startEpoch + durationMinutes * 60 * 1000;
       const remainingMs = Math.max(0, targetEpoch - Date.now());
       const remainingMins = Math.max(1, Math.ceil(remainingMs / 60000));
       const label =

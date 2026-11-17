@@ -1,5 +1,6 @@
 import React from 'react';
 import { Utensils, CheckCircle2, Clock, X, Bell } from 'lucide-react';
+import { computeLunchEndTimeFromTimeStr } from '../utils/punch-rules';
 
 interface LunchPromptModalProps {
   isOpen: boolean;
@@ -19,6 +20,9 @@ export const LunchPromptModal: React.FC<LunchPromptModalProps> = ({
   if (!isOpen) return null;
 
   const durationLabel = durationMinutes === 60 ? '1 hora' : `${durationMinutes} minutos`;
+  const zeroSecondEndTime = registeredTime
+    ? computeLunchEndTimeFromTimeStr(registeredTime, durationMinutes)
+    : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -44,7 +48,9 @@ export const LunchPromptModal: React.FC<LunchPromptModalProps> = ({
             É horário de almoço?
           </h3>
           <p className="text-xs pf-text-secondary leading-relaxed">
-            Se for <strong>Sim</strong>, o alarme e o contador de <strong>{durationLabel}</strong> serão ativados. O alarme soará e vibrará o celular mesmo com a tela bloqueada quando o tempo terminar!
+            Se for <strong>Sim</strong>, o alarme ({durationLabel}) despertará pontualmente às{' '}
+            <strong className="font-mono pf-text-accent">{zeroSecondEndTime || '--:--:00'}</strong>{' '}
+            (no início do minuto, com segundos zerados) mesmo com a tela bloqueada!
           </p>
         </div>
 

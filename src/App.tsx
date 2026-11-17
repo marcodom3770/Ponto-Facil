@@ -31,6 +31,7 @@ import {
   formatShortTime,
   formatDateBrazilian,
   calculateRemainingSeconds,
+  calculateZeroSecondLunchTarget,
   DEFAULT_LUNCH_MINUTES,
   PunchRecord,
   ThemeColor,
@@ -196,12 +197,14 @@ export default function App() {
   // Post-punch Lunch Prompt & Portal Modals
   const [showLunchPrompt, setShowLunchPrompt] = useState(false);
   const [lastPunchTime, setLastPunchTime] = useState('');
+  const [lastPunchEpoch, setLastPunchEpoch] = useState<number | null>(null);
   const [showPortalInteractive, setShowPortalInteractive] = useState(false);
   const [portalFlowMode, setPortalFlowMode] = useState<PortalFlowMode>('auto_punch');
 
   // Lunch Countdown State
   const [lunchActive, setLunchActive] = useState(false);
   const [lunchStartEpoch, setLunchStartEpoch] = useState<number | null>(null);
+  const [lunchTargetEpoch, setLunchTargetEpoch] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(DEFAULT_LUNCH_MINUTES * 60);
   const [expectedEndTimeStr, setExpectedEndTimeStr] = useState('');
   const [lunchStartTimeStr, setLunchStartTimeStr] = useState('');
@@ -354,18 +357,45 @@ export default function App() {
         const parsedLunch = JSON.parse(storedLunch);
         const now = Date.now();
         const duration = parsedLunch.durationMinutes || DEFAULT_LUNCH_MINUTES;
-        const left = calculateRemainingSeconds(parsedLunch.startEpoch, duration, now);
+        const zeroed = calculateZeroSecondLunchTarget(parsedLunch.startEpoch, duration);
+        const targetEpoch =
+          typeof parsedLunch.targetEpoch === 'number' && Number.isFinite(parsedLunch.targetEpoch)
+            ? parsedLunch.targetEpoch
+            : zeroed.targetEpoch;
+        const startEpochToUse =
+          typeof parsedLunch.targetEpoch === 'number' && Number.isFinite(parsedLunch.targetEpoch)
+            ? parsedLunch.startEpoch
+            : zeroed.startMinuteEpoch;
+        const endStrToUse =
+          typeof parsedLunch.targetEpoch === 'number' && Number.isFinite(parsedLunch.targetEpoch)
+            ? parsedLunch.expectedEndTimeStr
+            : zeroed.expectedEndTimeStr;
+
+        const left = calculateRemainingSeconds(startEpochToUse, duration, now, targetEpoch);
 
         if (left > 0) {
           setLunchActive(true);
-          setLunchStartEpoch(parsedLunch.startEpoch);
+          setLunchStartEpoch(startEpochToUse);
+          setLunchTargetEpoch(targetEpoch);
           setRemainingSeconds(left);
           setLunchDurationMinutes(duration);
           setLunchStartTimeStr(parsedLunch.startTimeStr);
-          setExpectedEndTimeStr(parsedLunch.expectedEndTimeStr);
-          startMobileLunchNotification(parsedLunch.startEpoch, duration, parsedLunch.expectedEndTimeStr);
+          setExpectedEndTimeStr(endStrToUse);
+          startMobileLunchNotification(startEpochToUse, duration, endStrToUse, targetEpoch);
+          if (targetEpoch !== parsedLunch.targetEpoch) {
+            localStorage.setItem(
+              STORAGE_KEYS.ACTIVE_LUNCH,
+              JSON.stringify({
+                ...parsedLunch,
+                startEpoch: startEpochToUse,
+                targetEpoch,
+                expectedEndTimeStr: endStrToUse,
+              })
+            );
+          }
         } else {
           setLunchActive(false);
+          setLunchTargetEpoch(null);
           setShowAlarmModal(true);
           startAlarmLoop(alarmSoundId);
           fireMobileAlarmNotificationNow(duration);
@@ -389,6 +419,7 @@ export default function App() {
   const triggerLunchCompletedAlarm = useCallback(
     (durationMins: number) => {
       setLunchActive(false);
+      setLunchTargetEpoch(null);
       stopLunchBackgroundKeepAlive();
       localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
 
@@ -408,7 +439,12 @@ export default function App() {
   useEffect(() => {
     if (!lunchActive || !lunchStartEpoch) return;
     const tick = () => {
-      const left = calculateRemainingSeconds(lunchStartEpoch, lunchDurationMinutes, Date.now());
+      const left = calculateRemainingSeconds(
+        lunchStartEpoch,
+        lunchDurationMinutes,
+        Date.now(),
+        lunchTargetEpoch ?? undefined
+      );
       setRemainingSeconds(left);
       if (left <= 0) {
         triggerLunchCompletedAlarm(lunchDurationMinutes);
@@ -420,7 +456,7 @@ export default function App() {
       if (tick()) clearInterval(interval);
     }, 1000);
     return () => clearInterval(interval);
-  }, [lunchActive, lunchStartEpoch, lunchDurationMinutes, triggerLunchCompletedAlarm]);
+  }, [lunchActive, lunchStartEpoch, lunchTargetEpoch, lunchDurationMinutes, triggerLunchCompletedAlarm]);
 
   // Immediate catch-up on app foreground
   useEffect(() => {
@@ -428,7 +464,12 @@ export default function App() {
       setNotificationPermission(getMobileNotificationStatus());
       checkMobileLunchNotification();
       if (lunchActive && lunchStartEpoch) {
-        const left = calculateRemainingSeconds(lunchStartEpoch, lunchDurationMinutes, Date.now());
+        const left = calculateRemainingSeconds(
+          lunchStartEpoch,
+          lunchDurationMinutes,
+          Date.now(),
+          lunchTargetEpoch ?? undefined
+        );
         setRemainingSeconds(left);
         if (left <= 0) triggerLunchCompletedAlarm(lunchDurationMinutes);
       }
@@ -441,7 +482,7 @@ export default function App() {
       window.removeEventListener('focus', handleResumeCheck);
       window.removeEventListener('pageshow', handleResumeCheck);
     };
-  }, [lunchActive, lunchStartEpoch, lunchDurationMinutes, triggerLunchCompletedAlarm]);
+  }, [lunchActive, lunchStartEpoch, lunchTargetEpoch, lunchDurationMinutes, triggerLunchCompletedAlarm]);
 
   // Sync live daily punch widget whenever today's punches / widgetPinned / privacyMode change
   useEffect(() => {
@@ -832,6 +873,7 @@ export default function App() {
         }
       } catch {}
       setLastPunchTime(recordedTime);
+      setLastPunchEpoch(punchDate.getTime());
       setShowLunchPrompt(true);
     },
     []
@@ -963,7 +1005,12 @@ export default function App() {
     setNotificationPermission(perm);
     if (perm === 'granted') {
       if (lunchActive && lunchStartEpoch) {
-        await startMobileLunchNotification(lunchStartEpoch, lunchDurationMinutes, expectedEndTimeStr);
+        await startMobileLunchNotification(
+          lunchStartEpoch,
+          lunchDurationMinutes,
+          expectedEndTimeStr,
+          lunchTargetEpoch ?? undefined
+        );
       }
       if (widgetPinned) {
         const payload = buildWidgetPayload(todayPunches, workSchedule, currentDate, privacyMode);
@@ -1046,22 +1093,24 @@ export default function App() {
     }
 
     const now = Date.now();
+    const punchEpoch =
+      lastPunchEpoch && Math.abs(now - lastPunchEpoch) < 15 * 60 * 1000 ? lastPunchEpoch : now;
     const duration = lunchDurationMinutes;
-    const totalSecs = duration * 60;
-    const startDate = new Date(now);
-    const endDate = new Date(now + totalSecs * 1000);
+    const { startMinuteEpoch, targetEpoch, expectedEndTimeStr: endStr } =
+      calculateZeroSecondLunchTarget(punchEpoch, duration);
 
-    const startStr = formatTime(startDate);
-    const endStr = formatTime(endDate);
+    const startStr = lastPunchTime || formatTime(new Date(punchEpoch));
+    const initialRemaining = calculateRemainingSeconds(startMinuteEpoch, duration, now, targetEpoch);
 
     setLunchActive(true);
-    setLunchStartEpoch(now);
-    setRemainingSeconds(totalSecs);
+    setLunchStartEpoch(startMinuteEpoch);
+    setLunchTargetEpoch(targetEpoch);
+    setRemainingSeconds(initialRemaining);
     setLunchStartTimeStr(startStr);
     setExpectedEndTimeStr(endStr);
 
     startLunchBackgroundKeepAlive(endStr);
-    startMobileLunchNotification(now, duration, endStr);
+    startMobileLunchNotification(startMinuteEpoch, duration, endStr, targetEpoch);
 
     if (punches.length > 0) {
       const updated = [...punches];
@@ -1073,7 +1122,8 @@ export default function App() {
     localStorage.setItem(
       STORAGE_KEYS.ACTIVE_LUNCH,
       JSON.stringify({
-        startEpoch: now,
+        startEpoch: startMinuteEpoch,
+        targetEpoch,
         durationMinutes: duration,
         startTimeStr: startStr,
         expectedEndTimeStr: endStr,
@@ -1086,6 +1136,7 @@ export default function App() {
   const handleCancelLunch = () => {
     setLunchActive(false);
     setLunchStartEpoch(null);
+    setLunchTargetEpoch(null);
     stopLunchBackgroundKeepAlive();
     clearMobileLunchNotification();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
@@ -1093,9 +1144,11 @@ export default function App() {
 
   const handleFastForwardDemo = () => {
     unlockAudioEngine();
-    const fakeStart = Date.now() - (lunchDurationMinutes * 60 - 5) * 1000;
-    const newEndStr = formatTime(new Date(Date.now() + 5000));
+    const demoTarget = Date.now() + 5000;
+    const fakeStart = demoTarget - lunchDurationMinutes * 60 * 1000;
+    const newEndStr = formatTime(new Date(demoTarget));
     setLunchStartEpoch(fakeStart);
+    setLunchTargetEpoch(demoTarget);
     setRemainingSeconds(5);
     setExpectedEndTimeStr(newEndStr);
 
@@ -1103,6 +1156,7 @@ export default function App() {
       STORAGE_KEYS.ACTIVE_LUNCH,
       JSON.stringify({
         startEpoch: fakeStart,
+        targetEpoch: demoTarget,
         durationMinutes: lunchDurationMinutes,
         startTimeStr: lunchStartTimeStr,
         expectedEndTimeStr: newEndStr,
@@ -1110,7 +1164,7 @@ export default function App() {
     );
 
     startLunchBackgroundKeepAlive(newEndStr);
-    startMobileLunchNotification(fakeStart, lunchDurationMinutes, newEndStr);
+    startMobileLunchNotification(fakeStart, lunchDurationMinutes, newEndStr, demoTarget);
   };
 
   const handleInitiatePunchFromAlarm = () => {
@@ -1118,6 +1172,7 @@ export default function App() {
     stopLunchBackgroundKeepAlive();
     setShowAlarmModal(false);
     setLunchActive(false);
+    setLunchTargetEpoch(null);
     clearMobileLunchNotification();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
     startTransition(() => {
@@ -1130,6 +1185,7 @@ export default function App() {
     stopLunchBackgroundKeepAlive();
     setShowAlarmModal(false);
     setLunchActive(false);
+    setLunchTargetEpoch(null);
     clearMobileLunchNotification();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
   };

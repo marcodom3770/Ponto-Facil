@@ -5,6 +5,9 @@ import {
   formatShortTime,
   formatDateBrazilian,
   calculateRemainingSeconds,
+  calculateZeroSecondLunchTarget,
+  computeLunchEndTimeFromTimeStr,
+  shouldShowPreventiveLunchAlert,
   formatCountdown,
   getGreeting,
   timeStringToMinutes,
@@ -42,6 +45,39 @@ test('calculateRemainingSeconds accurately computes 1-hour / 60-minute countdown
   assert.equal(calculateRemainingSeconds(startTime, 60, oneMinLater), 59 * 60);
   const oneHourLater = startTime + 60 * 60 * 1000;
   assert.equal(calculateRemainingSeconds(startTime, 60, oneHourLater), 0);
+});
+
+test('calculateZeroSecondLunchTarget zeroes seconds so 11:22:59 alarms at 12:22:00', () => {
+  const punchDate = new Date(2026, 10, 17, 11, 22, 59, 800);
+  const res = calculateZeroSecondLunchTarget(punchDate.getTime(), 60);
+
+  assert.equal(res.expectedEndTimeStr, '12:22:00');
+  const targetDate = new Date(res.targetEpoch);
+  assert.equal(targetDate.getHours(), 12);
+  assert.equal(targetDate.getMinutes(), 22);
+  assert.equal(targetDate.getSeconds(), 0);
+  assert.equal(targetDate.getMilliseconds(), 0);
+
+  // At 12:21:59.500 (500ms before 12:22:00), must still show 1s and NOT fire early
+  const beforeTarget = new Date(2026, 10, 17, 12, 21, 59, 500).getTime();
+  assert.equal(calculateRemainingSeconds(res.startMinuteEpoch, 60, beforeTarget, res.targetEpoch), 1);
+
+  // At 12:22:00.000 sharp, reaches 0 and triggers alarm
+  const atTarget = new Date(2026, 10, 17, 12, 22, 0, 0).getTime();
+  assert.equal(calculateRemainingSeconds(res.startMinuteEpoch, 60, atTarget, res.targetEpoch), 0);
+
+  // Formatted helper matches HH:mm:00 for 60 and 59 min durations
+  assert.equal(computeLunchEndTimeFromTimeStr('11:22:59', 60), '12:22:00');
+  assert.equal(computeLunchEndTimeFromTimeStr('11:22:59', 59), '12:21:00');
+});
+
+test('shouldShowPreventiveLunchAlert activates strictly inside the final 60s window before 0s', () => {
+  assert.equal(shouldShowPreventiveLunchAlert(61), false);
+  assert.equal(shouldShowPreventiveLunchAlert(60), true);
+  assert.equal(shouldShowPreventiveLunchAlert(30), true);
+  assert.equal(shouldShowPreventiveLunchAlert(1), true);
+  assert.equal(shouldShowPreventiveLunchAlert(0), false);
+  assert.equal(shouldShowPreventiveLunchAlert(-5), false);
 });
 
 test('formatCountdown formats minutes and seconds with zero padding', () => {

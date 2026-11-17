@@ -8,6 +8,7 @@ const STATE_CACHE = 'pontofacil-state-v1';
 const STATE_KEY = '/__lunch_timer_state__.json';
 
 let activeLunchTimeout = null;
+let activePreAlertTimeout = null;
 let activeLunchInterval = null;
 
 self.addEventListener('install', () => {
@@ -59,10 +60,33 @@ function stopInternalTimers() {
     clearTimeout(activeLunchTimeout);
     activeLunchTimeout = null;
   }
+  if (activePreAlertTimeout) {
+    clearTimeout(activePreAlertTimeout);
+    activePreAlertTimeout = null;
+  }
   if (activeLunchInterval) {
     clearInterval(activeLunchInterval);
     activeLunchInterval = null;
   }
+}
+
+async function firePreventivePreAlertNotification(state) {
+  if (!state || state.alarmFired || state.preAlertFired) return;
+  await saveLunchState({ ...state, preAlertFired: true });
+
+  try {
+    await self.registration.showNotification('⚠️ Falta 1 minuto para voltar do almoço!', {
+      body: `Fique pronto com o celular para bater o ponto às ${state.expectedEndTimeStr || '--:--:00'}.`,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: 'ponto-lunch-prealert',
+      renotify: true,
+      requireInteraction: false,
+      silent: false,
+      vibrate: [180, 90, 180],
+      data: { action: 'abrir', url: '/' },
+    });
+  } catch {}
 }
 
 async function fireFinalAlarmNotification(state) {
@@ -186,8 +210,11 @@ async function scheduleNativeTriggerIfSupported(state) {
 async function startLunchNotificationCycle(data) {
   stopInternalTimers();
 
-  const { startEpoch, durationMinutes = 60, expectedEndTimeStr } = data;
-  const targetEpoch = startEpoch + durationMinutes * 60 * 1000;
+  const { startEpoch, durationMinutes = 60, expectedEndTimeStr, targetEpoch: explicitTargetEpoch } = data;
+  const targetEpoch =
+    typeof explicitTargetEpoch === 'number' && Number.isFinite(explicitTargetEpoch)
+      ? explicitTargetEpoch
+      : startEpoch + durationMinutes * 60 * 1000;
   const state = {
     startEpoch,
     durationMinutes,
@@ -215,6 +242,15 @@ async function startLunchNotificationCycle(data) {
     }
   }, remainingMs);
 
+  // Preventive 1-minute warning timeout
+  const preAlertDelayMs = remainingMs - 60000;
+  if (preAlertDelayMs > 0) {
+    activePreAlertTimeout = setTimeout(async () => {
+      const latest = (await loadLunchState()) || state;
+      await firePreventivePreAlertNotification(latest);
+    }, preAlertDelayMs);
+  }
+
   // Update mobile notification bar every 60s while SW stays awake
   activeLunchInterval = setInterval(async () => {
     const latest = await loadLunchState();
@@ -226,6 +262,9 @@ async function startLunchNotificationCycle(data) {
       stopInternalTimers();
       await fireFinalAlarmNotification(latest);
     } else {
+      if (latest.targetEpoch - Date.now() <= 60000 && !latest.preAlertFired) {
+        await firePreventivePreAlertNotification(latest);
+      }
       await showOngoingCountdownNotification(latest);
     }
   }, 60000);
@@ -255,7 +294,7 @@ async function clearLunchNotification() {
   stopInternalTimers();
   await deleteLunchState();
 
-  const tags = ['ponto-lunch-countdown', 'ponto-lunch-alarm'];
+  const tags = ['ponto-lunch-countdown', 'ponto-lunch-prealert', 'ponto-lunch-alarm'];
   for (const tag of tags) {
     try {
       const notifications = await self.registration.getNotifications({ tag, includeTriggered: true });
