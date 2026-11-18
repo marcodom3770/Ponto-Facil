@@ -1288,12 +1288,17 @@ export default function App() {
       <header className="border-b pf-border pf-surface sticky top-0 z-30 transition-colors">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
           {/* Left: Clean Brand Wordmark */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="bg-slate-950 text-white dark:bg-white dark:text-slate-950 px-2 py-0.5 rounded font-black text-[11px] tracking-tighter uppercase border pf-border">
-              GRUPO
+          <div className="flex flex-col justify-center shrink-0 leading-none">
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-950 text-white dark:bg-white dark:text-slate-950 px-2 py-0.5 rounded font-black text-[11px] tracking-tighter uppercase border pf-border">
+                GRUPO
+              </div>
+              <span className="font-extrabold text-sm sm:text-base tracking-tight">
+                pernambucanas
+              </span>
             </div>
-            <span className="font-extrabold text-sm sm:text-base tracking-tight">
-              pernambucanas
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.06em] uppercase pf-text-muted mt-1 whitespace-nowrap">
+              DESENVOLVEDOR: MARCOS ROBERTO
             </span>
           </div>
 
