@@ -24,7 +24,8 @@ const COLOR_MAP: Record<
     darkTrail: string;
     lightHead: string;
     lightTrail: string;
-    rgb: string;
+    lightRgb: string;
+    darkRgb: string;
   }
 > = {
   yellow: {
@@ -32,56 +33,128 @@ const COLOR_MAP: Record<
     darkTrail: '#eab308',
     lightHead: '#a16207',
     lightTrail: '#d97706',
-    rgb: '234, 179, 8',
+    lightRgb: '217, 119, 6',
+    darkRgb: '250, 204, 21',
   },
   green: {
     darkHead: '#bbf7d0',
     darkTrail: '#10b981',
     lightHead: '#047857',
-    lightTrail: '#10b981',
-    rgb: '16, 185, 129',
+    lightTrail: '#059669',
+    lightRgb: '5, 150, 105',
+    darkRgb: '16, 185, 129',
   },
   red: {
     darkHead: '#fecaca',
     darkTrail: '#ef4444',
     lightHead: '#b91c1c',
     lightTrail: '#dc2626',
-    rgb: '239, 68, 68',
+    lightRgb: '220, 38, 38',
+    darkRgb: '239, 68, 68',
   },
   blue: {
     darkHead: '#bae6fd',
     darkTrail: '#38bdf8',
     lightHead: '#0369a1',
     lightTrail: '#0284c7',
-    rgb: '56, 189, 248',
+    lightRgb: '2, 132, 199',
+    darkRgb: '56, 189, 248',
   },
   purple: {
     darkHead: '#f5d0fe',
     darkTrail: '#a855f7',
     lightHead: '#6d28d9',
     lightTrail: '#7c3aed',
-    rgb: '168, 85, 247',
+    lightRgb: '124, 58, 237',
+    darkRgb: '168, 85, 247',
   },
   orange: {
     darkHead: '#fed7aa',
     darkTrail: '#fb923c',
     lightHead: '#c2410c',
     lightTrail: '#ea580c',
-    rgb: '249, 115, 22',
+    lightRgb: '234, 88, 12',
+    darkRgb: '251, 146, 60',
   },
   teal: {
     darkHead: '#99f6e4',
     darkTrail: '#2dd4bf',
     lightHead: '#0f766e',
     lightTrail: '#0d9488',
-    rgb: '45, 212, 191',
+    lightRgb: '13, 148, 136',
+    darkRgb: '45, 212, 191',
   },
   pink: {
     darkHead: '#fbcfe8',
     darkTrail: '#f472b6',
     lightHead: '#be185d',
     lightTrail: '#db2777',
-    rgb: '244, 114, 182',
+    lightRgb: '219, 39, 119',
+    darkRgb: '244, 114, 182',
+  },
+  onyx: {
+    darkHead: '#f8fafc',
+    darkTrail: '#cbd5e1',
+    lightHead: '#020617',
+    lightTrail: '#0f172a',
+    lightRgb: '15, 23, 42',
+    darkRgb: '226, 232, 240',
+  },
+  graphite: {
+    darkHead: '#e2e8f0',
+    darkTrail: '#94a3b8',
+    lightHead: '#1e293b',
+    lightTrail: '#334155',
+    lightRgb: '51, 65, 85',
+    darkRgb: '148, 163, 184',
+  },
+  navy: {
+    darkHead: '#bfdbfe',
+    darkTrail: '#60a5fa',
+    lightHead: '#172554',
+    lightTrail: '#1e3a8a',
+    lightRgb: '30, 58, 138',
+    darkRgb: '96, 165, 250',
+  },
+  forest: {
+    darkHead: '#bbf7d0',
+    darkTrail: '#4ade80',
+    lightHead: '#052e16',
+    lightTrail: '#14532d',
+    lightRgb: '20, 83, 45',
+    darkRgb: '74, 222, 128',
+  },
+  wine: {
+    darkHead: '#fecdd3',
+    darkTrail: '#fb7185',
+    lightHead: '#4c0519',
+    lightTrail: '#881337',
+    lightRgb: '136, 19, 55',
+    darkRgb: '251, 113, 133',
+  },
+  indigo: {
+    darkHead: '#c7d2fe',
+    darkTrail: '#818cf8',
+    lightHead: '#1e1b4b',
+    lightTrail: '#312e81',
+    lightRgb: '49, 46, 129',
+    darkRgb: '129, 140, 248',
+  },
+  espresso: {
+    darkHead: '#fde68a',
+    darkTrail: '#f59e0b',
+    lightHead: '#290f02',
+    lightTrail: '#451a03',
+    lightRgb: '69, 26, 3',
+    darkRgb: '245, 158, 11',
+  },
+  petrol: {
+    darkHead: '#99f6e4',
+    darkTrail: '#2dd4bf',
+    lightHead: '#042f2e',
+    lightTrail: '#115e59',
+    lightRgb: '17, 94, 89',
+    darkRgb: '45, 212, 191',
   },
 };
 
@@ -114,7 +187,16 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({
             rgb: tok.rgb,
           };
         })()
-      : COLOR_MAP[color] || COLOR_MAP.yellow;
+      : (() => {
+          const entry = COLOR_MAP[color] || COLOR_MAP.yellow;
+          return {
+            darkHead: entry.darkHead,
+            darkTrail: entry.darkTrail,
+            lightHead: entry.lightHead,
+            lightTrail: entry.lightTrail,
+            rgb: isDarkMode ? entry.darkRgb : entry.lightRgb,
+          };
+        })();
 
   const effectiveStyle: BackgroundStyle = !enabled ? 'minimal' : backgroundStyle;
   const speedMultiplier = speed === 'slow' ? 0.55 : speed === 'fast' ? 1.75 : 1.0;

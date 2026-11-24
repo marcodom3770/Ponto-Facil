@@ -21,6 +21,7 @@ import {
 import {
   BackdropSpeed,
   BackgroundStyle,
+  CURATED_THEME_PALETTES,
   ClockStyle,
   RadiusStyle,
   SurfaceStyle,
@@ -148,18 +149,46 @@ const PRESET_THEMES: Array<{
       backdropInteractive: false,
     },
   },
+  {
+    id: 'executivo-onyx',
+    name: 'Executivo Ônix (Claro)',
+    desc: 'Tema claro com alto contraste preto ônix e grade precisa',
+    swatch: '#0f172a',
+    config: {
+      themeColor: 'onyx',
+      isDarkMode: false,
+      backgroundStyle: 'grid',
+      surfaceStyle: 'solid',
+      radiusStyle: 'sharp',
+      clockStyle: 'digital',
+      matrixEnabled: true,
+      matrixOpacity: 0.16,
+      backdropSpeed: 'normal',
+      backdropInteractive: true,
+    },
+  },
+  {
+    id: 'marinho-corp',
+    name: 'Marinho Corporativo (Claro)',
+    desc: 'Azul marinho profundo com vidro claro e meta da jornada',
+    swatch: '#1e3a8a',
+    config: {
+      themeColor: 'navy',
+      isDarkMode: false,
+      backgroundStyle: 'constellation',
+      surfaceStyle: 'glass',
+      radiusStyle: 'balanced',
+      clockStyle: 'progress',
+      matrixEnabled: true,
+      matrixOpacity: 0.18,
+      backdropSpeed: 'slow',
+      backdropInteractive: true,
+    },
+  },
 ];
 
-const PALETTES: Array<{ id: Exclude<ThemeColor, 'custom'>; name: string; hex: string }> = [
-  { id: 'yellow', name: 'Amarelo', hex: '#facc15' },
-  { id: 'green', name: 'Verde', hex: '#10b981' },
-  { id: 'blue', name: 'Azul', hex: '#38bdf8' },
-  { id: 'red', name: 'Vermelho', hex: '#ef4444' },
-  { id: 'purple', name: 'Roxo', hex: '#a855f7' },
-  { id: 'orange', name: 'Laranja', hex: '#fb923c' },
-  { id: 'teal', name: 'Turquesa', hex: '#2dd4bf' },
-  { id: 'pink', name: 'Rosa', hex: '#f472b6' },
-];
+const VIBRANT_PALETTES = CURATED_THEME_PALETTES.filter((p) => p.group === 'vibrant');
+const DARK_LIGHT_PALETTES = CURATED_THEME_PALETTES.filter((p) => p.group === 'dark-light');
 
 const BACKGROUNDS: Array<{
   id: BackgroundStyle;
@@ -252,7 +281,7 @@ export const VisualStudioPanel: React.FC<VisualStudioPanelProps> = ({
           <span className="text-[11px] pf-text-muted">Aplica paleta + fundo + superfície + relógio</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {PRESET_THEMES.map((preset) => {
             const isActive =
               visual.themeColor === preset.config.themeColor &&
@@ -272,10 +301,18 @@ export const VisualStudioPanel: React.FC<VisualStudioPanelProps> = ({
                 }`}
               >
                 <span
-                  className="w-8 h-8 rounded-lg shrink-0 border border-black/15 shadow-sm flex items-center justify-center"
+                  className="w-8 h-8 rounded-lg shrink-0 border border-black/20 dark:border-white/20 shadow-sm flex items-center justify-center"
                   style={{ backgroundColor: preset.swatch }}
                 >
-                  {isActive && <Check className="w-4 h-4 text-black" />}
+                  {isActive && (
+                    <Check
+                      className={`w-4 h-4 ${
+                        preset.config.themeColor === 'onyx' || preset.config.themeColor === 'navy'
+                          ? 'text-white'
+                          : 'text-black'
+                      }`}
+                    />
+                  )}
                 </span>
                 <div className="min-w-0">
                   <div className="text-xs font-extrabold truncate">{preset.name}</div>
@@ -298,28 +335,69 @@ export const VisualStudioPanel: React.FC<VisualStudioPanelProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {PALETTES.map((p) => {
-              const selected = visual.themeColor === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onUpdateVisual({ themeColor: p.id })}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 pf-control-radius border text-left transition cursor-pointer ${
-                    selected
-                      ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
-                      : 'pf-surface-muted pf-border hover:opacity-90'
-                  }`}
-                >
-                  <span
-                    className="w-5 h-5 rounded-full shrink-0 border border-black/15"
-                    style={{ backgroundColor: p.hex }}
-                  />
-                  <span className="text-xs font-bold">{p.name}</span>
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider pf-text-muted mb-2">
+                Cores Vibrantes
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {VIBRANT_PALETTES.map((p) => {
+                  const selected = visual.themeColor === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onUpdateVisual({ themeColor: p.id })}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 pf-control-radius border text-left transition cursor-pointer ${
+                        selected
+                          ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
+                          : 'pf-surface-muted pf-border hover:opacity-90'
+                      }`}
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full shrink-0 border border-black/15"
+                        style={{ backgroundColor: visual.isDarkMode ? p.darkHex : p.hex }}
+                      />
+                      <span className="text-xs font-bold">{p.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t pf-border">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider pf-text-muted">
+                  Cores Escuras
+                </span>
+                <span className="text-[10px] font-semibold pf-text-accent">
+                  Ideais para Tema Claro
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {DARK_LIGHT_PALETTES.map((p) => {
+                  const selected = visual.themeColor === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onUpdateVisual({ themeColor: p.id })}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 pf-control-radius border text-left transition cursor-pointer ${
+                        selected
+                          ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
+                          : 'pf-surface-muted pf-border hover:opacity-90'
+                      }`}
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full shrink-0 border border-black/20 dark:border-white/25"
+                        style={{ backgroundColor: p.hex }}
+                      />
+                      <span className="text-xs font-bold">{p.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Custom Color Wheel / Hex Input */}

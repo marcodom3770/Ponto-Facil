@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import {
   ThemeColor,
+  CURATED_THEME_PALETTES,
   BackgroundStyle,
   ClockStyle,
   SurfaceStyle,
@@ -119,16 +120,8 @@ interface SettingsModalProps {
   onNotificationStatusChange?: (status: MobileNotificationStatus) => void;
 }
 
-const THEME_COLORS: { id: Exclude<ThemeColor, 'custom'>; name: string; hex: string }[] = [
-  { id: 'yellow', name: 'Amarelo', hex: '#facc15' },
-  { id: 'green', name: 'Verde', hex: '#10b981' },
-  { id: 'red', name: 'Vermelho', hex: '#ef4444' },
-  { id: 'blue', name: 'Azul', hex: '#38bdf8' },
-  { id: 'purple', name: 'Roxo', hex: '#a855f7' },
-  { id: 'orange', name: 'Laranja', hex: '#fb923c' },
-  { id: 'teal', name: 'Turquesa', hex: '#2dd4bf' },
-  { id: 'pink', name: 'Rosa', hex: '#f472b6' },
-];
+const VIBRANT_COLORS = CURATED_THEME_PALETTES.filter((c) => c.group === 'vibrant');
+const DARK_LIGHT_COLORS = CURATED_THEME_PALETTES.filter((c) => c.group === 'dark-light');
 
 const BACKGROUND_STYLES: { id: BackgroundStyle; name: string; desc: string }[] = [
   { id: 'constellation', name: 'Constelação', desc: 'Nós ligados ao cursor' },
@@ -486,36 +479,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            {/* 8 Color Palette Selector */}
-            <div>
-              <label className="block text-xs pf-text-secondary mb-2 font-bold">
-                Cor Principal do Sistema (Botões, Relógio, Abas, Efeito de Fundo e Bordas)
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {THEME_COLORS.map((c) => {
-                  const isSelected = localThemeColor === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => {
-                        setLocalThemeColor(c.id);
-                        emitVisualPreview({ themeColor: c.id });
-                      }}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition cursor-pointer ${
-                        isSelected
-                          ? 'pf-surface pf-border-accent-solid ring-2 ring-[var(--pf-accent)] shadow-sm'
-                          : 'pf-surface pf-border hover:opacity-90'
-                      }`}
-                    >
-                      <span
-                        className="w-5 h-5 rounded-full shrink-0 shadow-sm border border-black/15"
-                        style={{ backgroundColor: c.hex }}
-                      />
-                      <span className="text-xs font-bold whitespace-nowrap">{c.name}</span>
-                    </button>
-                  );
-                })}
+            {/* 16 Color Palette Selector (Vibrantes + Escuras p/ Tema Claro) */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs pf-text-secondary mb-2 font-bold">
+                  Cores Vibrantes
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {VIBRANT_COLORS.map((c) => {
+                    const isSelected = localThemeColor === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setLocalThemeColor(c.id);
+                          emitVisualPreview({ themeColor: c.id });
+                        }}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          isSelected
+                            ? 'pf-surface pf-border-accent-solid ring-2 ring-[var(--pf-accent)] shadow-sm'
+                            : 'pf-surface pf-border hover:opacity-90'
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 shadow-sm border border-black/15"
+                          style={{ backgroundColor: localIsDark ? c.darkHex : c.hex }}
+                        />
+                        <span className="text-xs font-bold whitespace-nowrap">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-xs pf-text-secondary font-bold">
+                    Cores Escuras
+                  </label>
+                  <span className="text-[11px] font-semibold pf-text-accent">
+                    Ideais para Tema Claro
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {DARK_LIGHT_COLORS.map((c) => {
+                    const isSelected = localThemeColor === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setLocalThemeColor(c.id);
+                          emitVisualPreview({ themeColor: c.id });
+                        }}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          isSelected
+                            ? 'pf-surface pf-border-accent-solid ring-2 ring-[var(--pf-accent)] shadow-sm'
+                            : 'pf-surface pf-border hover:opacity-90'
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 shadow-sm border border-black/20 dark:border-white/25"
+                          style={{ backgroundColor: c.hex }}
+                        />
+                        <span className="text-xs font-bold whitespace-nowrap">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

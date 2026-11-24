@@ -35,6 +35,7 @@ import {
   DEFAULT_LUNCH_MINUTES,
   PunchRecord,
   ThemeColor,
+  CURATED_THEME_PALETTES,
   BackgroundStyle,
   ClockStyle,
   SurfaceStyle,
@@ -1254,16 +1255,8 @@ export default function App() {
     }
   }, [activeIsDarkMode, activeThemeColor, activeCustomHex, activeSurfaceStyle, activeRadiusStyle]);
 
-  const QUICK_COLORS: { id: Exclude<ThemeColor, 'custom'>; hex: string; label: string }[] = [
-    { id: 'yellow', hex: '#facc15', label: 'Amarelo' },
-    { id: 'green', hex: '#10b981', label: 'Verde' },
-    { id: 'blue', hex: '#38bdf8', label: 'Azul' },
-    { id: 'red', hex: '#ef4444', label: 'Vermelho' },
-    { id: 'purple', hex: '#a855f7', label: 'Roxo' },
-    { id: 'orange', hex: '#fb923c', label: 'Laranja' },
-    { id: 'teal', hex: '#2dd4bf', label: 'Turquesa' },
-    { id: 'pink', hex: '#f472b6', label: 'Rosa' },
-  ];
+  const VIBRANT_QUICK_COLORS = CURATED_THEME_PALETTES.filter((c) => c.group === 'vibrant');
+  const DARK_QUICK_COLORS = CURATED_THEME_PALETTES.filter((c) => c.group === 'dark-light');
 
   const miniWidgetPayload = useMemo(
     () => buildWidgetPayload(todayPunches, workSchedule, currentDate, privacyMode),
@@ -1297,7 +1290,7 @@ export default function App() {
                 pernambucanas
               </span>
             </div>
-            <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.06em] uppercase pf-text-muted mt-1 whitespace-nowrap">
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.06em] uppercase pf-dev-credit-glow mt-1 whitespace-nowrap">
               DESENVOLVEDOR: MARCOS ROBERTO
             </span>
           </div>
@@ -1367,7 +1360,7 @@ export default function App() {
               </button>
 
               {showQuickThemeMenu && (
-                <div className="absolute right-0 mt-2 w-56 pf-surface-solid border pf-border pf-card-radius shadow-2xl p-3 z-50 space-y-2.5">
+                <div className="absolute right-0 mt-2 w-64 pf-surface-solid border pf-border pf-card-radius shadow-2xl p-3 z-50 space-y-2.5">
                   <div className="flex items-center justify-between text-[11px] font-bold pf-text-muted">
                     <span>Cor Rápida</span>
                     <button
@@ -1381,31 +1374,72 @@ export default function App() {
                       Abrir Estúdio
                     </button>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {QUICK_COLORS.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          handleUpdateVisual({ themeColor: c.id });
-                          setShowQuickThemeMenu(false);
-                        }}
-                        title={c.label}
-                        className={`flex flex-col items-center p-1.5 rounded-lg border cursor-pointer transition ${
-                          activeThemeColor === c.id
-                            ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
-                            : 'pf-border hover:pf-surface-muted'
-                        }`}
-                      >
-                        <span
-                          className="w-4 h-4 rounded-full border border-black/15"
-                          style={{ backgroundColor: c.hex }}
-                        />
-                        <span className="text-[9px] font-semibold mt-1 truncate w-full text-center">
-                          {c.label}
-                        </span>
-                      </button>
-                    ))}
+
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider pf-text-muted mb-1">
+                        Vibrantes
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {VIBRANT_QUICK_COLORS.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              handleUpdateVisual({ themeColor: c.id });
+                              setShowQuickThemeMenu(false);
+                            }}
+                            title={c.name}
+                            className={`flex flex-col items-center p-1.5 rounded-lg border cursor-pointer transition ${
+                              activeThemeColor === c.id
+                                ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
+                                : 'pf-border hover:pf-surface-muted'
+                            }`}
+                          >
+                            <span
+                              className="w-4 h-4 rounded-full border border-black/15"
+                              style={{ backgroundColor: activeIsDarkMode ? c.darkHex : c.hex }}
+                            />
+                            <span className="text-[9px] font-semibold mt-1 truncate w-full text-center">
+                              {c.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t pf-border">
+                      <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider pf-text-muted mb-1">
+                        <span>Escuras</span>
+                        <span className="pf-text-accent normal-case font-semibold">Tema Claro</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {DARK_QUICK_COLORS.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              handleUpdateVisual({ themeColor: c.id });
+                              setShowQuickThemeMenu(false);
+                            }}
+                            title={`${c.name} (Ideal para Tema Claro)`}
+                            className={`flex flex-col items-center p-1.5 rounded-lg border cursor-pointer transition ${
+                              activeThemeColor === c.id
+                                ? 'pf-surface-muted pf-border-accent-solid ring-1 ring-[var(--pf-accent)]'
+                                : 'pf-border hover:pf-surface-muted'
+                            }`}
+                          >
+                            <span
+                              className="w-4 h-4 rounded-full border border-black/20 dark:border-white/25"
+                              style={{ backgroundColor: c.hex }}
+                            />
+                            <span className="text-[9px] font-semibold mt-1 truncate w-full text-center">
+                              {c.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

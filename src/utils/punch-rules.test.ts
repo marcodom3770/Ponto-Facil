@@ -32,6 +32,7 @@ import {
   calculateCombinedBankOfHours,
   buildExportBackupPayload,
   parseAndMergeBackupPayload,
+  CURATED_THEME_PALETTES,
 } from './punch-rules';
 
 test('DEFAULT_LUNCH_MINUTES is 60 or 59 as configured', () => {
@@ -369,6 +370,25 @@ test('buildExportBackupPayload and parseAndMergeBackupPayload merge across devic
   assert.equal(merged.visual?.themeColor, 'green');
   assert.equal(merged.settings?.autoVisibility, 'background');
 });
+
+test('CURATED_THEME_PALETTES includes vibrant and dark executive colors for light theme', () => {
+  const vibrant = CURATED_THEME_PALETTES.filter((p) => p.group === 'vibrant');
+  const darkLight = CURATED_THEME_PALETTES.filter((p) => p.group === 'dark-light');
+  assert.equal(vibrant.length, 8);
+  assert.equal(darkLight.length, 8);
+
+  const ids = new Set(CURATED_THEME_PALETTES.map((p) => p.id));
+  assert.equal(ids.size, 16);
+  assert.ok(ids.has('onyx'));
+  assert.ok(ids.has('navy'));
+  assert.ok(ids.has('wine'));
+
+  for (const palette of CURATED_THEME_PALETTES) {
+    assert.match(palette.hex, /^#[0-9a-f]{6}$/i);
+    assert.match(palette.darkHex, /^#[0-9a-f]{6}$/i);
+  }
+});
+
 
 
 

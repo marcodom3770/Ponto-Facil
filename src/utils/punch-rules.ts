@@ -24,7 +24,44 @@ export type ThemeColor =
   | 'orange'
   | 'teal'
   | 'pink'
+  | 'onyx'
+  | 'graphite'
+  | 'navy'
+  | 'forest'
+  | 'wine'
+  | 'indigo'
+  | 'espresso'
+  | 'petrol'
   | 'custom';
+
+export interface ThemePaletteItem {
+  id: Exclude<ThemeColor, 'custom'>;
+  name: string;
+  hex: string;
+  darkHex: string;
+  group: 'vibrant' | 'dark-light';
+}
+
+export const CURATED_THEME_PALETTES: ThemePaletteItem[] = [
+  // Cores Vibrantes (Clássicas)
+  { id: 'yellow', name: 'Amarelo', hex: '#eab308', darkHex: '#facc15', group: 'vibrant' },
+  { id: 'green', name: 'Verde', hex: '#059669', darkHex: '#10b981', group: 'vibrant' },
+  { id: 'blue', name: 'Azul', hex: '#0284c7', darkHex: '#38bdf8', group: 'vibrant' },
+  { id: 'red', name: 'Vermelho', hex: '#dc2626', darkHex: '#ef4444', group: 'vibrant' },
+  { id: 'purple', name: 'Roxo', hex: '#7c3aed', darkHex: '#a855f7', group: 'vibrant' },
+  { id: 'orange', name: 'Laranja', hex: '#ea580c', darkHex: '#fb923c', group: 'vibrant' },
+  { id: 'teal', name: 'Turquesa', hex: '#0d9488', darkHex: '#2dd4bf', group: 'vibrant' },
+  { id: 'pink', name: 'Rosa', hex: '#db2777', darkHex: '#f472b6', group: 'vibrant' },
+  // Cores Escuras (Ideais para Tema Claro)
+  { id: 'onyx', name: 'Ônix', hex: '#0f172a', darkHex: '#e2e8f0', group: 'dark-light' },
+  { id: 'graphite', name: 'Grafite', hex: '#334155', darkHex: '#94a3b8', group: 'dark-light' },
+  { id: 'navy', name: 'Marinho', hex: '#1e3a8a', darkHex: '#60a5fa', group: 'dark-light' },
+  { id: 'forest', name: 'Musgo', hex: '#14532d', darkHex: '#4ade80', group: 'dark-light' },
+  { id: 'wine', name: 'Vinho', hex: '#881337', darkHex: '#fb7185', group: 'dark-light' },
+  { id: 'indigo', name: 'Índigo', hex: '#312e81', darkHex: '#818cf8', group: 'dark-light' },
+  { id: 'espresso', name: 'Café', hex: '#451a03', darkHex: '#f59e0b', group: 'dark-light' },
+  { id: 'petrol', name: 'Petróleo', hex: '#115e59', darkHex: '#2dd4bf', group: 'dark-light' },
+];
 export type ThemeMode = 'dark' | 'light';
 export type BackgroundStyle =
   | 'matrix'
