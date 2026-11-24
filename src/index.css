@@ -31,6 +31,7 @@
   --pf-accent-soft: rgba(234, 179, 8, 0.14);
   --pf-accent-border: rgba(202, 138, 4, 0.36);
   --pf-accent-glow: rgba(234, 179, 8, 0.26);
+  --pf-sheen-peak: color-mix(in srgb, var(--pf-accent-text) 42%, #94a3b8);
 }
 
 html.dark {
@@ -54,6 +55,7 @@ html.dark {
   --pf-accent-soft: rgba(250, 204, 21, 0.13);
   --pf-accent-border: rgba(250, 204, 21, 0.32);
   --pf-accent-glow: rgba(250, 204, 21, 0.28);
+  --pf-sheen-peak: #ffffff;
 }
 
 /* ── Surface Style Variants ──────────────────────────────────────────────── */
@@ -509,21 +511,33 @@ body {
   accent-color: var(--pf-accent);
 }
 
-@keyframes pf-dev-pulse {
-  0%,
-  100% {
-    opacity: 0.78;
-    text-shadow: 0 0 0px transparent;
+@keyframes pf-dev-gradient-slide {
+  0% {
+    background-position: 100% 50%;
   }
-  50% {
-    opacity: 1;
-    text-shadow: 0 0 10px var(--pf-accent-glow), 0 0 3px var(--pf-accent-soft);
+  100% {
+    background-position: -100% 50%;
   }
 }
 
 .pf-dev-credit-glow {
+  display: inline-block;
   color: var(--pf-accent-text);
-  animation: pf-dev-pulse 3.6s ease-in-out infinite;
+  background-image: linear-gradient(
+    110deg,
+    var(--pf-accent-text) 0%,
+    var(--pf-accent-text) 35%,
+    var(--pf-sheen-peak) 50%,
+    var(--pf-accent-text) 65%,
+    var(--pf-accent-text) 100%
+  );
+  background-size: 250% 100%;
+  background-position: 100% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pf-dev-gradient-slide 4.5s linear infinite;
+  filter: drop-shadow(0 0 6px var(--pf-accent-soft));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -531,6 +545,12 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .pf-dev-credit-glow {
+    background-image: none;
+    -webkit-text-fill-color: var(--pf-accent-text);
+    filter: none;
   }
 }
 
@@ -566,6 +586,13 @@ body {
 
   .pf-text-accent {
     color: #0f172a !important;
+  }
+
+  .pf-dev-credit-glow {
+    background-image: none !important;
+    -webkit-text-fill-color: #0f172a !important;
+    color: #0f172a !important;
+    filter: none !important;
   }
 }
 

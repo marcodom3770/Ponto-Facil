@@ -75,7 +75,7 @@ import { PersistentLunchNotification } from './components/PersistentLunchNotific
 import { AlarmReturnModal } from './components/AlarmReturnModal';
 import { PunchHistoryCard } from './components/PunchHistoryCard';
 import { SettingsModal, VisualPreviewPayload } from './components/SettingsModal';
-import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { MatrixBackground } from './components/MatrixBackground';
 import { BancoDeHorasPanel } from './components/BancoDeHorasPanel';
 import { MobileWidgetStudio } from './components/MobileWidgetStudio';
@@ -92,6 +92,11 @@ import {
   fireMobileAlarmNotificationNow,
   syncMobileTodayWidget,
   clearMobileTodayWidget,
+  ensureWebPushSubscription,
+  scheduleServerLunchPush,
+  cancelServerLunchPush,
+  scheduleAndroidNativeLunchAlarm,
+  cancelAndroidNativeLunchAlarm,
   MobileNotificationStatus,
 } from './utils/service-worker-client';
 
@@ -383,6 +388,8 @@ export default function App() {
           setLunchStartTimeStr(parsedLunch.startTimeStr);
           setExpectedEndTimeStr(endStrToUse);
           startMobileLunchNotification(startEpochToUse, duration, endStrToUse, targetEpoch);
+          void scheduleServerLunchPush(targetEpoch, duration, endStrToUse);
+          scheduleAndroidNativeLunchAlarm(targetEpoch, endStrToUse);
           if (targetEpoch !== parsedLunch.targetEpoch) {
             localStorage.setItem(
               STORAGE_KEYS.ACTIVE_LUNCH,
@@ -991,6 +998,8 @@ export default function App() {
           localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
           startAlarmLoop(alarmSoundId);
           setShowAlarmModal(true);
+        } else if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED') {
+          void ensureWebPushSubscription(false);
         }
       };
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
@@ -1005,6 +1014,7 @@ export default function App() {
     const perm = await requestMobileNotificationPermission();
     setNotificationPermission(perm);
     if (perm === 'granted') {
+      await ensureWebPushSubscription(false);
       if (lunchActive && lunchStartEpoch) {
         await startMobileLunchNotification(
           lunchStartEpoch,
@@ -1012,6 +1022,10 @@ export default function App() {
           expectedEndTimeStr,
           lunchTargetEpoch ?? undefined
         );
+        if (lunchTargetEpoch) {
+          void scheduleServerLunchPush(lunchTargetEpoch, lunchDurationMinutes, expectedEndTimeStr);
+          scheduleAndroidNativeLunchAlarm(lunchTargetEpoch, expectedEndTimeStr);
+        }
       }
       if (widgetPinned) {
         const payload = buildWidgetPayload(todayPunches, workSchedule, currentDate, privacyMode);
@@ -1112,6 +1126,8 @@ export default function App() {
 
     startLunchBackgroundKeepAlive(endStr);
     startMobileLunchNotification(startMinuteEpoch, duration, endStr, targetEpoch);
+    void scheduleServerLunchPush(targetEpoch, duration, endStr);
+    scheduleAndroidNativeLunchAlarm(targetEpoch, endStr);
 
     if (punches.length > 0) {
       const updated = [...punches];
@@ -1140,6 +1156,8 @@ export default function App() {
     setLunchTargetEpoch(null);
     stopLunchBackgroundKeepAlive();
     clearMobileLunchNotification();
+    void cancelServerLunchPush();
+    cancelAndroidNativeLunchAlarm();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
   };
 
@@ -1166,6 +1184,8 @@ export default function App() {
 
     startLunchBackgroundKeepAlive(newEndStr);
     startMobileLunchNotification(fakeStart, lunchDurationMinutes, newEndStr, demoTarget);
+    void scheduleServerLunchPush(demoTarget, lunchDurationMinutes, newEndStr);
+    scheduleAndroidNativeLunchAlarm(demoTarget, newEndStr);
   };
 
   const handleInitiatePunchFromAlarm = () => {
@@ -1175,6 +1195,8 @@ export default function App() {
     setLunchActive(false);
     setLunchTargetEpoch(null);
     clearMobileLunchNotification();
+    void cancelServerLunchPush();
+    cancelAndroidNativeLunchAlarm();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
     startTransition(() => {
       handleInitiatePunch();
@@ -1188,6 +1210,8 @@ export default function App() {
     setLunchActive(false);
     setLunchTargetEpoch(null);
     clearMobileLunchNotification();
+    void cancelServerLunchPush();
+    cancelAndroidNativeLunchAlarm();
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_LUNCH);
   };
 
@@ -1301,7 +1325,7 @@ export default function App() {
               [
                 { id: 'ponto', label: 'Registro de Ponto', icon: Fingerprint },
                 { id: 'banco', label: 'Banco de Horas', icon: TrendingUp },
-                { id: 'widget', label: 'Widget Celular', icon: Smartphone },
+                { id: 'widget', label: 'Widget & App', icon: Smartphone },
                 { id: 'visual', label: 'Estúdio Visual', icon: Palette },
               ] as const
             ).map((item) => {
@@ -1859,6 +1883,8 @@ export default function App() {
         onSyncPunchesFromPortal={handleSyncPunchesFromPortal}
         onCloseWithoutSaving={() => setShowPortalInteractive(false)}
       />
+
+      <OfflineIndicator />
     </div>
   );
 }

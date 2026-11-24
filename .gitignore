@@ -8,3 +8,5 @@ coverage/
 !.env.example
 .aistudio/
 metadata.json
+.pontofacil-vapid.json
+.pontofacil-push-schedules.json

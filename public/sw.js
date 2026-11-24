@@ -5,19 +5,47 @@
  */
 
 const STATE_CACHE = 'pontofacil-state-v1';
+const SHELL_CACHE = 'pontofacil-shell-v2';
 const STATE_KEY = '/__lunch_timer_state__.json';
+
+const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/apple-touch-icon.png',
+];
 
 let activeLunchTimeout = null;
 let activePreAlertTimeout = null;
 let activeLunchInterval = null;
 
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
   self.skipWaiting();
+  event.waitUntil(
+    caches
+      .open(SHELL_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS).catch(() => undefined))
+      .catch(() => undefined)
+  );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    self.clients.claim().then(() => checkPersistedLunchTimer())
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k !== STATE_CACHE && k !== SHELL_CACHE)
+            .map((k) => caches.delete(k))
+        )
+      )
+      .catch(() => undefined)
+      .then(() => self.clients.claim())
+      .then(() => checkPersistedLunchTimer())
   );
 });
 
@@ -77,7 +105,7 @@ async function firePreventivePreAlertNotification(state) {
   try {
     await self.registration.showNotification('⚠️ Falta 1 minuto para voltar do almoço!', {
       body: `Fique pronto com o celular para bater o ponto às ${state.expectedEndTimeStr || '--:--:00'}.`,
-      icon: '/icon.svg',
+      icon: '/pwa-192x192.png',
       badge: '/icon.svg',
       tag: 'ponto-lunch-prealert',
       renotify: true,
@@ -107,7 +135,7 @@ async function fireFinalAlarmNotification(state) {
   try {
     await self.registration.showNotification(`⏰ FIM DO ALMOÇO (${durationLabel})!`, {
       body: 'Seu horário de descanso terminou! Toque aqui para registrar o ponto de retorno agora.',
-      icon: '/icon.svg',
+      icon: '/pwa-192x192.png',
       badge: '/icon.svg',
       tag: 'ponto-lunch-alarm',
       renotify: true,
@@ -150,7 +178,7 @@ async function showOngoingCountdownNotification(state) {
   try {
     await self.registration.showNotification(`🥪 Almoço Ativo: ${label}`, {
       body: `Retorno previsto às ${state.expectedEndTimeStr || '--:--'} • Alarme automático ativo`,
-      icon: '/icon.svg',
+      icon: '/pwa-192x192.png',
       badge: '/icon.svg',
       tag: 'ponto-lunch-countdown',
       renotify: false,
@@ -187,7 +215,7 @@ async function scheduleNativeTriggerIfSupported(state) {
 
       await self.registration.showNotification(`⏰ FIM DO ALMOÇO (${durationLabel})!`, {
         body: 'Seu horário de descanso terminou! Toque aqui para registrar o ponto de retorno agora.',
-        icon: '/icon.svg',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-lunch-alarm',
         renotify: true,
@@ -355,7 +383,7 @@ async function syncTodayPunchWidget(payload, pinned) {
     try {
       await self.registration.showNotification(payload.notificationTitle || '📋 PontoFácil • Marcações de Hoje', {
         body: payload.notificationBody || 'Acompanhe suas marcações do dia em tempo real.',
-        icon: '/assets/aistudio/image_3b45cbb0.png',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-widget-hoje',
         renotify: false,
@@ -378,10 +406,31 @@ async function clearTodayPunchWidget() {
   } catch {}
 }
 
-// Serve cached widget JSON directly for PWA Adaptive Cards
+function isOfflineCacheableStaticPath(pathname) {
+  if (
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/lg-p/') ||
+    pathname.startsWith('/autenticacao') ||
+    pathname.startsWith('/Autoatendimento') ||
+    pathname.startsWith('/Api.') ||
+    pathname.startsWith('/LG.') ||
+    pathname.startsWith('/@vite') ||
+    pathname.startsWith('/@react-refresh') ||
+    pathname.startsWith('/src/') ||
+    pathname.startsWith('/node_modules/')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+// Serve cached widget JSON directly for PWA Adaptive Cards + offline app-shell fallback
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
   try {
     const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) return;
+
     if (url.pathname === WIDGET_DATA_KEY) {
       event.respondWith(
         loadWidgetData().then((cached) => {
@@ -393,8 +442,173 @@ self.addEventListener('fetch', (event) => {
           return fetch(event.request);
         })
       );
+      return;
+    }
+
+    if (!isOfflineCacheableStaticPath(url.pathname)) return;
+
+    // Navigation requests: network-first, fallback to cached shell when offline
+    if (event.request.mode === 'navigate') {
+      event.respondWith(
+        fetch(event.request)
+          .then((res) => {
+            if (res && res.ok) {
+              const copy = res.clone();
+              caches.open(SHELL_CACHE).then((c) => c.put('/index.html', copy)).catch(() => {});
+            }
+            return res;
+          })
+          .catch(async () => {
+            const cached = (await caches.match(event.request)) || (await caches.match('/index.html')) || (await caches.match('/'));
+            return cached || Response.error();
+          })
+      );
+      return;
+    }
+
+    // Built/static assets (/assets/*, *.png, *.svg, /manifest.json): stale-while-revalidate
+    if (
+      url.pathname.startsWith('/assets/') ||
+      /\.(png|svg|ico|webmanifest|json|css|js)$/i.test(url.pathname)
+    ) {
+      event.respondWith(
+        caches.match(event.request).then((cached) => {
+          const networkFetch = fetch(event.request)
+            .then((res) => {
+              if (res && res.ok) {
+                const copy = res.clone();
+                caches.open(SHELL_CACHE).then((c) => c.put(event.request, copy)).catch(() => {});
+              }
+              return res;
+            })
+            .catch(() => cached);
+          return cached || networkFetch;
+        })
+      );
     }
   } catch {}
+});
+
+// Handle incoming Web Push messages even when the app is completely closed
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    (async () => {
+      let data = {};
+      try {
+        data = event.data ? event.data.json() : {};
+      } catch {
+        const text = event.data ? event.data.text() : '';
+        data = { body: text };
+      }
+
+      const pushType = data.type || 'alarm';
+
+      if (pushType === 'prealert') {
+        const existing = await loadLunchState();
+        if (existing) {
+          await saveLunchState({ ...existing, preAlertFired: true });
+        }
+        await self.registration.showNotification(
+          data.title || '⚠️ Falta 1 minuto para voltar do almoço!',
+          {
+            body:
+              data.body ||
+              `Fique pronto com o celular para bater o ponto às ${data.expectedEndTimeStr || '--:--:00'}.`,
+            icon: '/pwa-192x192.png',
+            badge: '/icon.svg',
+            tag: 'ponto-lunch-prealert',
+            renotify: true,
+            requireInteraction: false,
+            silent: false,
+            vibrate: [180, 90, 180],
+            data: { action: 'abrir', url: '/' },
+            actions: [{ action: 'abrir', title: 'Abrir App' }],
+          }
+        );
+        return;
+      }
+
+      if (pushType === 'test') {
+        await self.registration.showNotification(
+          data.title || '🔔 Push Real (App Fechado) — PontoFácil',
+          {
+            body:
+              data.body ||
+              'Teste de segundo plano recebido com sucesso! O despertador funcionará mesmo com o app fechado.',
+            icon: '/pwa-192x192.png',
+            badge: '/icon.svg',
+            tag: 'ponto-test-push',
+            renotify: true,
+            requireInteraction: false,
+            silent: false,
+            vibrate: [250, 120, 250],
+            data: { action: 'abrir', url: '/?tab=widget' },
+            actions: [
+              { action: 'bater_ponto', title: '▶️ Bater Ponto' },
+              { action: 'abrir', title: 'Abrir App' },
+            ],
+          }
+        );
+        return;
+      }
+
+      // Default: 'alarm' (end of lunch)
+      const existing = await loadLunchState();
+      await saveLunchState({
+        ...(existing || {}),
+        durationMinutes: data.durationMinutes || existing?.durationMinutes || 60,
+        expectedEndTimeStr: data.expectedEndTimeStr || existing?.expectedEndTimeStr || '--:--:00',
+        targetEpoch: data.targetEpoch || existing?.targetEpoch || Date.now(),
+        alarmFired: true,
+      });
+
+      try {
+        const countdownNotes = await self.registration.getNotifications({ tag: 'ponto-lunch-countdown' });
+        countdownNotes.forEach((n) => n.close());
+      } catch {}
+
+      await self.registration.showNotification(
+        data.title || '⏰ FIM DO ALMOÇO! Hora de bater o ponto',
+        {
+          body:
+            data.body ||
+            'Seu horário de almoço terminou! Toque em "Bater Ponto Agora" para abrir e registrar no Portal.',
+          icon: '/pwa-192x192.png',
+          badge: '/icon.svg',
+          tag: 'ponto-lunch-alarm',
+          renotify: true,
+          requireInteraction: true,
+          silent: false,
+          vibrate: [500, 200, 500, 200, 800, 200, 500],
+          data: { action: 'bater_ponto', url: '/?action=bater_ponto' },
+          actions: [
+            { action: 'bater_ponto', title: '▶️ Bater Ponto Agora' },
+            { action: 'abrir', title: 'Abrir App' },
+          ],
+        }
+      );
+
+      try {
+        const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of clientList) {
+          client.postMessage({
+            type: 'LUNCH_ALARM_FIRED',
+            targetEpoch: data.targetEpoch || Date.now(),
+          });
+        }
+      } catch {}
+    })()
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+      }
+    })
+  );
 });
 
 // Handle incoming messages from the React app
@@ -424,7 +638,7 @@ self.addEventListener('message', (event) => {
     event.waitUntil(
       self.registration.showNotification('🔔 PontoFácil Pernambucanas', {
         body: 'Notificação ativa na barra do celular! O contador e o alarme de almoço aparecerão aqui.',
-        icon: '/icon.svg',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-test',
         renotify: true,

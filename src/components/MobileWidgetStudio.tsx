@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Smartphone,
   Pin,
@@ -14,6 +14,9 @@ import {
   Layers,
   Info,
   Play,
+  BellRing,
+  Download,
+  AppWindow,
 } from 'lucide-react';
 import {
   PunchRecord,
@@ -24,6 +27,11 @@ import {
 import {
   MobileNotificationStatus,
   detectWidgetCapabilities,
+  getExistingWebPushSubscription,
+  ensureWebPushSubscription,
+  sendServerBackgroundTestPush,
+  getAndroidOverlayStatus,
+  requestAndroidOverlayPermission,
 } from '../utils/service-worker-client';
 
 interface MobileWidgetStudioProps {
@@ -56,10 +64,64 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
   const [previewSize, setPreviewSize] = useState<WidgetPreviewSize>('medium');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pushReady, setPushReady] = useState(false);
+  const [isPushBusy, setIsPushBusy] = useState(false);
 
   const payload = buildWidgetPayload(todayPunches, schedule, currentDate, privacyMode);
   const caps = detectWidgetCapabilities();
+  const androidOverlay = getAndroidOverlayStatus();
   const liveClock = formatTime(currentDate);
+
+  useEffect(() => {
+    let mounted = true;
+    getExistingWebPushSubscription().then((sub) => {
+      if (mounted) setPushReady(Boolean(sub));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [notificationPermission]);
+
+  const handleEnableWebPush = async () => {
+    setIsPushBusy(true);
+    setSyncMessage(null);
+    try {
+      const res = await ensureWebPushSubscription(true);
+      if (res.ok) {
+        setPushReady(true);
+        setSyncMessage(
+          'Despertador Web Push em 2º plano ativado! O servidor agora envia pré-aviso (1 min antes) e alarme final mesmo com o app fechado.'
+        );
+      } else {
+        setSyncMessage(res.error || 'Não foi possível ativar o Web Push neste navegador.');
+      }
+    } finally {
+      setIsPushBusy(false);
+    }
+  };
+
+  const handleTestBackgroundPush = async () => {
+    setIsPushBusy(true);
+    setSyncMessage(null);
+    try {
+      const res = await sendServerBackgroundTestPush(5);
+      if (res.ok) {
+        setPushReady(true);
+        setSyncMessage(
+          `Push agendado no servidor para daqui ${res.scheduledInSeconds ?? 5}s! Minimize ou feche o app agora para testar o alerta.`
+        );
+      } else {
+        setSyncMessage(res.error || 'Falha ao agendar Push de teste.');
+      }
+    } finally {
+      setIsPushBusy(false);
+    }
+  };
+
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const androidDownloadUrl = `/api/android-wrapper/download${
+    currentOrigin ? `?appUrl=${encodeURIComponent(currentOrigin)}` : ''
+  }`;
 
   const handleTogglePin = async () => {
     setIsSyncing(true);
@@ -451,7 +513,120 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
             </div>
           </div>
 
-          {/* Option 2: Floating Picture-in-Picture / Mini-Widget */}
+          {/* Option 2: Real Web Push (Closed-App Background Wake-Up) */}
+          <div className="pf-surface border pf-card-radius p-5 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 pf-control-radius pf-bg-accent-soft pf-text-accent border pf-border-accent">
+                  <BellRing className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold">
+                    2. Despertar com App Fechado (Web Push Real no Servidor)
+                  </h4>
+                  <p className="text-xs pf-text-muted">
+                    Diferente de timers locais (que o Android pausa ao fechar o navegador), o servidor envia um Push de alta prioridade na hora exata do retorno.
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 pf-control-radius shrink-0 border ${
+                  pushReady
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                    : 'pf-surface-muted pf-text-muted pf-border'
+                }`}
+              >
+                {pushReady ? 'Push Ativo' : 'Não Inscrito'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isPushBusy}
+                onClick={handleEnableWebPush}
+                className={`px-4 py-2 pf-control-radius text-xs font-extrabold transition cursor-pointer ${
+                  pushReady ? 'pf-surface-muted border pf-border' : 'pf-btn-accent'
+                }`}
+              >
+                {pushReady ? 'Sincronizar Inscrição Push' : 'Ativar Despertar com App Fechado'}
+              </button>
+              <button
+                type="button"
+                disabled={isPushBusy}
+                onClick={handleTestBackgroundPush}
+                className="px-3.5 py-2 pf-control-radius text-xs font-bold pf-bg-accent-soft pf-text-accent border pf-border-accent hover:opacity-90 cursor-pointer"
+              >
+                Testar Alerta com App Fechado (5s)
+              </button>
+            </div>
+          </div>
+
+          {/* Option 3: Native Android App with SYSTEM_ALERT_WINDOW Overlay */}
+          <div className="pf-surface border pf-card-radius p-5 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 pf-control-radius pf-bg-accent-soft pf-text-accent border pf-border-accent">
+                  <AppWindow className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold">
+                    3. App Nativo Android com Sobreposição Automática
+                  </h4>
+                  <p className="text-xs pf-text-muted">
+                    Por segurança do Android, nenhum navegador/PWA consegue abrir sozinho por cima de outros apps. Para abertura automática real no fim do almoço, use o envoltório Android nativo.
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 pf-control-radius shrink-0 border ${
+                  androidOverlay.isNativeWrapper
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                    : 'pf-bg-accent-soft pf-text-accent border pf-border-accent'
+                }`}
+              >
+                {androidOverlay.isNativeWrapper ? 'App Nativo Ativo' : 'APK Sobreposição'}
+              </span>
+            </div>
+
+            {androidOverlay.isNativeWrapper ? (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-xs font-medium pf-text-secondary">
+                  Permissão &ldquo;Exibir sobre outros apps&rdquo;:{' '}
+                  <strong>{androidOverlay.hasOverlayPermission ? 'Concedida' : 'Pendente'}</strong>
+                </span>
+                {!androidOverlay.hasOverlayPermission && (
+                  <button
+                    type="button"
+                    onClick={() => requestAndroidOverlayPermission()}
+                    className="px-3.5 py-2 pf-btn-accent pf-control-radius text-xs font-extrabold cursor-pointer"
+                  >
+                    Liberar Sobreposição no Android
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <p className="text-xs pf-text-secondary leading-relaxed">
+                  O pacote contém um projeto Android Studio (Kotlin) configurado para este endereço com{' '}
+                  <code className="pf-text-accent">SYSTEM_ALERT_WINDOW</code> +{' '}
+                  <code className="pf-text-accent">AlarmManager</code>, mantendo 100% da automação web no Portal Nossa Gente e abrindo o app por cima de qualquer tela ao fim do almoço.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={androidDownloadUrl}
+                    download="PontoFacilAndroid.zip"
+                    className="inline-flex items-center gap-2 px-4 py-2 pf-btn-accent pf-control-radius text-xs font-extrabold transition cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Baixar Projeto Android (.zip)</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Option 4: Floating Picture-in-Picture / Mini-Widget */}
           <div className="pf-surface border pf-card-radius p-5 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -460,7 +635,7 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
                 </div>
                 <div>
                   <h4 className="text-sm font-bold">
-                    2. Widget Flutuante Sempre Visível (Mini-Janela)
+                    4. Widget Flutuante Sempre Visível (Mini-Janela)
                   </h4>
                   <p className="text-xs pf-text-muted">
                     Abre um mini-card compacto com relógio ao vivo, batidas de hoje e botão rápido.
@@ -481,7 +656,7 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
             </button>
           </div>
 
-          {/* Option 3: Home Screen Icons, Shortcuts & Microsoft Edge Native PWA Widget */}
+          {/* Option 5: Home Screen Icons, Shortcuts & Microsoft Edge Native PWA Widget */}
           <div className="pf-surface border pf-card-radius p-5 space-y-3">
             <div className="flex items-center gap-2.5">
               <div className="p-2 pf-control-radius pf-bg-accent-soft pf-text-accent border pf-border-accent">
@@ -489,7 +664,7 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
               </div>
               <div>
                 <h4 className="text-sm font-bold">
-                  3. Atalhos na Tela Inicial &amp; Widget PWA (Manifest + Adaptive Card)
+                  5. Atalhos na Tela Inicial &amp; Widget PWA (Manifest + Adaptive Card)
                 </h4>
                 <p className="text-xs pf-text-muted">
                   Como colocar direto na área de trabalho do celular com transparência técnica:

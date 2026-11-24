@@ -119,7 +119,7 @@ export async function startMobileLunchNotification(
       try {
         await reg.showNotification(`🥪 Almoço Ativo: ${label}`, {
           body: `Retorno previsto às ${expectedEndTimeStr} • Alarme automático ativo`,
-          icon: '/icon.svg',
+          icon: '/pwa-192x192.png',
           badge: '/icon.svg',
           tag: 'ponto-lunch-countdown',
           renotify: false,
@@ -167,7 +167,7 @@ export async function fireMobileAlarmNotificationNow(durationMinutes: number) {
     try {
       await reg.showNotification(`⏰ FIM DO ALMOÇO (${durationLabel})!`, {
         body: 'Seu horário de descanso terminou! Toque aqui para registrar o ponto de retorno agora.',
-        icon: '/icon.svg',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-lunch-alarm',
         renotify: true,
@@ -186,7 +186,7 @@ export async function clearMobileLunchNotification() {
     reg.active.postMessage({ type: 'CLEAR_LUNCH_TIMER' });
   }
   if (reg && typeof reg.getNotifications === 'function') {
-    for (const tag of ['ponto-lunch-countdown', 'ponto-lunch-alarm']) {
+    for (const tag of ['ponto-lunch-countdown', 'ponto-lunch-prealert', 'ponto-lunch-alarm']) {
       try {
         const list = await reg.getNotifications({ tag });
         list.forEach((n) => n.close());
@@ -225,7 +225,7 @@ export async function sendMobileTestNotification(): Promise<{
     try {
       await reg.showNotification('🔔 PontoFácil Pernambucanas', {
         body: 'Notificação ativa na barra do celular! O contador e o alarme de almoço aparecerão aqui.',
-        icon: '/icon.svg',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-test',
         renotify: true,
@@ -252,7 +252,7 @@ export async function sendMobileTestNotification(): Promise<{
   try {
     new Notification('🔔 PontoFácil Pernambucanas', {
       body: 'Notificação ativa! O alarme de almoço aparecerá aqui.',
-      icon: '/icon.svg',
+      icon: '/pwa-192x192.png',
     });
     return { ok: true, permission: 'granted' };
   } catch (err) {
@@ -267,11 +267,98 @@ export async function sendMobileTestNotification(): Promise<{
 export interface WidgetCapabilities {
   hasServiceWorker: boolean;
   hasNotifications: boolean;
+  hasPushManager: boolean;
   notificationPermission: MobileNotificationStatus;
   hasDocumentPiP: boolean;
   isStandalonePWA: boolean;
+  isNativeOverlayApp: boolean;
   isIOS: boolean;
   isAndroid: boolean;
+}
+
+export interface PontoFacilAndroidBridge {
+  isNativeWrapper?: () => boolean;
+  hasOverlayPermission?: () => boolean;
+  requestOverlayPermission?: () => void;
+  scheduleLunchAlarm?: (targetEpochMs: number, expectedEndStr: string) => void;
+  cancelLunchAlarm?: () => void;
+}
+
+function getAndroidBridge(): PontoFacilAndroidBridge | null {
+  if (typeof window === 'undefined') return null;
+  const bridge = (window as unknown as { PontoFacilAndroid?: PontoFacilAndroidBridge })
+    .PontoFacilAndroid;
+  return bridge || null;
+}
+
+export function isRunningInAndroidOverlayWrapper(): boolean {
+  const bridge = getAndroidBridge();
+  if (!bridge) return false;
+  try {
+    return typeof bridge.isNativeWrapper === 'function' ? Boolean(bridge.isNativeWrapper()) : true;
+  } catch {
+    return false;
+  }
+}
+
+export function getAndroidOverlayStatus(): {
+  isNativeWrapper: boolean;
+  hasOverlayPermission: boolean;
+} {
+  const bridge = getAndroidBridge();
+  if (!bridge) {
+    return { isNativeWrapper: false, hasOverlayPermission: false };
+  }
+  try {
+    return {
+      isNativeWrapper:
+        typeof bridge.isNativeWrapper === 'function' ? Boolean(bridge.isNativeWrapper()) : true,
+      hasOverlayPermission:
+        typeof bridge.hasOverlayPermission === 'function'
+          ? Boolean(bridge.hasOverlayPermission())
+          : false,
+    };
+  } catch {
+    return { isNativeWrapper: false, hasOverlayPermission: false };
+  }
+}
+
+export function requestAndroidOverlayPermission(): boolean {
+  const bridge = getAndroidBridge();
+  if (bridge && typeof bridge.requestOverlayPermission === 'function') {
+    bridge.requestOverlayPermission();
+    return true;
+  }
+  return false;
+}
+
+export function scheduleAndroidNativeLunchAlarm(
+  targetEpoch: number,
+  expectedEndTimeStr: string
+): boolean {
+  const bridge = getAndroidBridge();
+  if (bridge && typeof bridge.scheduleLunchAlarm === 'function') {
+    try {
+      bridge.scheduleLunchAlarm(targetEpoch, expectedEndTimeStr);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function cancelAndroidNativeLunchAlarm(): boolean {
+  const bridge = getAndroidBridge();
+  if (bridge && typeof bridge.cancelLunchAlarm === 'function') {
+    try {
+      bridge.cancelLunchAlarm();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 export function detectWidgetCapabilities(): WidgetCapabilities {
@@ -279,9 +366,11 @@ export function detectWidgetCapabilities(): WidgetCapabilities {
     return {
       hasServiceWorker: false,
       hasNotifications: false,
+      hasPushManager: false,
       notificationPermission: 'unsupported',
       hasDocumentPiP: false,
       isStandalonePWA: false,
+      isNativeOverlayApp: false,
       isIOS: false,
       isAndroid: false,
     };
@@ -295,12 +384,178 @@ export function detectWidgetCapabilities(): WidgetCapabilities {
   return {
     hasServiceWorker: 'serviceWorker' in navigator,
     hasNotifications: 'Notification' in window,
+    hasPushManager: 'PushManager' in window,
     notificationPermission: getMobileNotificationStatus(),
     hasDocumentPiP: 'documentPictureInPicture' in window,
     isStandalonePWA,
+    isNativeOverlayApp: isRunningInAndroidOverlayWrapper(),
     isIOS: /iphone|ipad|ipod/.test(ua),
     isAndroid: /android/.test(ua),
   };
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+export async function getExistingWebPushSubscription(): Promise<PushSubscriptionJSON | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return null;
+  }
+  try {
+    const reg = await getSWRegistration();
+    if (!reg?.pushManager) return null;
+    const sub = await reg.pushManager.getSubscription();
+    return sub ? sub.toJSON() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function ensureWebPushSubscription(interactive = false): Promise<{
+  ok: boolean;
+  subscription?: PushSubscriptionJSON;
+  error?: string;
+}> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return { ok: false, error: 'Este navegador não suporta Web Push em segundo plano.' };
+  }
+
+  if (!('Notification' in window)) {
+    return { ok: false, error: 'API de notificações indisponível.' };
+  }
+
+  let perm = Notification.permission;
+  if (perm === 'default' && interactive) {
+    perm = await Notification.requestPermission();
+  }
+  if (perm !== 'granted') {
+    return {
+      ok: false,
+      error:
+        perm === 'denied'
+          ? 'Permissão de notificação bloqueada nas configurações do navegador.'
+          : 'Permissão de notificação ainda não concedida.',
+    };
+  }
+
+  const reg = await getSWRegistration();
+  if (!reg || !reg.pushManager) {
+    return { ok: false, error: 'Service Worker / PushManager indisponível neste dispositivo.' };
+  }
+
+  try {
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const keyRes = await fetch('/api/push/vapid-public-key');
+      if (!keyRes.ok) {
+        return { ok: false, error: 'Falha ao obter chave VAPID do servidor.' };
+      }
+      const { publicKey } = (await keyRes.json()) as { publicKey?: string };
+      if (!publicKey) {
+        return { ok: false, error: 'Chave pública VAPID não configurada no servidor.' };
+      }
+
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      });
+    }
+
+    const subJson = sub.toJSON();
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: subJson }),
+    }).catch(() => undefined);
+
+    return { ok: true, subscription: subJson };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível ativar Web Push (no iPhone exige instalar na Tela de Início).',
+    };
+  }
+}
+
+export async function scheduleServerLunchPush(
+  targetEpoch: number,
+  durationMinutes: number,
+  expectedEndTimeStr: string
+): Promise<boolean> {
+  const resSub = await ensureWebPushSubscription(false);
+  if (!resSub.ok || !resSub.subscription) return false;
+  try {
+    const res = await fetch('/api/push/schedule-lunch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: resSub.subscription,
+        targetEpoch,
+        durationMinutes,
+        expectedEndTimeStr,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function cancelServerLunchPush(): Promise<void> {
+  try {
+    const existing = await getExistingWebPushSubscription();
+    await fetch('/api/push/cancel-lunch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: existing?.endpoint || '' }),
+    });
+  } catch {}
+}
+
+export async function sendServerBackgroundTestPush(delaySeconds = 5): Promise<{
+  ok: boolean;
+  scheduledInSeconds?: number;
+  error?: string;
+}> {
+  const resSub = await ensureWebPushSubscription(true);
+  if (!resSub.ok || !resSub.subscription) {
+    return { ok: false, error: resSub.error || 'Falha ao ativar Web Push.' };
+  }
+  try {
+    const res = await fetch('/api/push/test-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: resSub.subscription,
+        delaySeconds,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      scheduledInSeconds?: number;
+    };
+    if (!res.ok || !data.ok) {
+      return { ok: false, error: data.error || 'Falha ao disparar Push no servidor.' };
+    }
+    return { ok: true, scheduledInSeconds: data.scheduledInSeconds ?? delaySeconds };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Erro de rede ao agendar Push.',
+    };
+  }
 }
 
 export interface WidgetNotificationPayloadInput {
@@ -337,7 +592,7 @@ export async function syncMobileTodayWidget(
     try {
       await reg.showNotification(payload.notificationTitle, {
         body: payload.notificationBody,
-        icon: '/assets/aistudio/image_3b45cbb0.png',
+        icon: '/pwa-192x192.png',
         badge: '/icon.svg',
         tag: 'ponto-widget-hoje',
         renotify: false,

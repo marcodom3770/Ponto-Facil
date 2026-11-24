@@ -1,8 +1,16 @@
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import {
+  loadOrCreateVapidKeys,
+  sendWebPushNotification,
+  PushSubscriptionJSON,
+  ScheduledLunchPush,
+} from './src/utils/web-push-server';
+import { buildAndroidNativeWrapperZip } from './src/utils/android-wrapper';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -501,11 +509,228 @@ async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
   // Apply JSON body parser ONLY to internal app API routes (never to proxied LG/Norber /api/* routes!)
-  app.use(['/api/portal', '/api/ponto'], express.json());
+  app.use(['/api/portal', '/api/ponto', '/api/push'], express.json());
 
   // Health endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  // ── WEB PUSH (VAPID) BACKGROUND ALARM SCHEDULER + ANDROID OVERLAY WRAPPER ──
+  const vapidStoragePath = path.resolve(__dirname, '.pontofacil-vapid.json');
+  const pushSchedulesPath = path.resolve(__dirname, '.pontofacil-push-schedules.json');
+  const vapidKeys = loadOrCreateVapidKeys(vapidStoragePath);
+  const pushSubscriptions = new Map<string, PushSubscriptionJSON>();
+  const scheduledLunchPushes = new Map<string, ScheduledLunchPush>();
+
+  const persistPushSchedules = () => {
+    try {
+      const list = [...scheduledLunchPushes.values()];
+      fs.writeFileSync(pushSchedulesPath, JSON.stringify(list, null, 2), 'utf8');
+    } catch {
+      // Non-fatal in read-only filesystems
+    }
+  };
+
+  try {
+    if (fs.existsSync(pushSchedulesPath)) {
+      const raw = JSON.parse(fs.readFileSync(pushSchedulesPath, 'utf8'));
+      if (Array.isArray(raw)) {
+        const cutoff = Date.now() - 6 * 3600 * 1000;
+        for (const item of raw as ScheduledLunchPush[]) {
+          if (item?.id && item?.subscription?.endpoint && item.targetEpoch > cutoff) {
+            scheduledLunchPushes.set(item.id, item);
+            pushSubscriptions.set(item.subscription.endpoint, item.subscription);
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore corrupted cache
+  }
+
+  let pushLoopBusy = false;
+  setInterval(async () => {
+    if (pushLoopBusy || scheduledLunchPushes.size === 0) return;
+    pushLoopBusy = true;
+    try {
+      const now = Date.now();
+      let dirty = false;
+
+      for (const [id, sched] of scheduledLunchPushes.entries()) {
+        if (!sched.preAlertSent && !sched.alarmSent && sched.preAlertEpoch > 0 && now >= sched.preAlertEpoch && now < sched.targetEpoch) {
+          sched.preAlertSent = true;
+          dirty = true;
+          const result = await sendWebPushNotification(
+            sched.subscription,
+            {
+              type: 'prealert',
+              title: '⚠️ Falta 1 minuto para voltar do almoço!',
+              body: `Prepare-se no celular para bater o ponto às ${sched.expectedEndTimeStr}.`,
+              expectedEndTimeStr: sched.expectedEndTimeStr,
+              targetEpoch: sched.targetEpoch,
+              durationMinutes: sched.durationMinutes,
+            },
+            vapidKeys
+          );
+          if (result.status === 404 || result.status === 410) {
+            scheduledLunchPushes.delete(id);
+            pushSubscriptions.delete(sched.subscription.endpoint);
+            continue;
+          }
+        }
+
+        if (!sched.alarmSent && now >= sched.targetEpoch) {
+          sched.alarmSent = true;
+          dirty = true;
+          const durationLabel = sched.durationMinutes === 60 ? '1 hora' : `${sched.durationMinutes} min`;
+          const result = await sendWebPushNotification(
+            sched.subscription,
+            {
+              type: 'alarm',
+              title: `⏰ FIM DO ALMOÇO (${durationLabel})!`,
+              body: `Horário ${sched.expectedEndTimeStr} atingido! Toque para bater seu ponto no Portal Nossa Gente.`,
+              expectedEndTimeStr: sched.expectedEndTimeStr,
+              targetEpoch: sched.targetEpoch,
+              durationMinutes: sched.durationMinutes,
+            },
+            vapidKeys
+          );
+          if (result.status === 404 || result.status === 410) {
+            scheduledLunchPushes.delete(id);
+            pushSubscriptions.delete(sched.subscription.endpoint);
+            continue;
+          }
+        }
+
+        if (sched.alarmSent && now - sched.targetEpoch > 6 * 3600 * 1000) {
+          scheduledLunchPushes.delete(id);
+          dirty = true;
+        }
+      }
+
+      if (dirty) persistPushSchedules();
+    } finally {
+      pushLoopBusy = false;
+    }
+  }, 1000);
+
+  app.get('/api/push/vapid-public-key', (_req, res) => {
+    res.json({ publicKey: vapidKeys.publicKey });
+  });
+
+  app.post('/api/push/subscribe', (req, res) => {
+    const sub = req.body?.subscription as PushSubscriptionJSON | undefined;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return res.status(400).json({ ok: false, error: 'Assinatura Push inválida.' });
+    }
+    pushSubscriptions.set(sub.endpoint, sub);
+    return res.json({ ok: true, count: pushSubscriptions.size });
+  });
+
+  app.post('/api/push/schedule-lunch', (req, res) => {
+    const sub = req.body?.subscription as PushSubscriptionJSON | undefined;
+    const targetEpoch = Number(req.body?.targetEpoch);
+    const durationMinutes = Number(req.body?.durationMinutes) || 60;
+    const expectedEndTimeStr = String(req.body?.expectedEndTimeStr || '--:--:00');
+
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return res.status(400).json({ ok: false, error: 'Assinatura Push ausente ou inválida.' });
+    }
+    if (!Number.isFinite(targetEpoch) || targetEpoch <= Date.now() - 60000) {
+      return res.status(400).json({ ok: false, error: 'Horário de almoço inválido para agendamento.' });
+    }
+
+    pushSubscriptions.set(sub.endpoint, sub);
+    const remainingMs = targetEpoch - Date.now();
+    const preAlertEpoch = remainingMs > 70000 ? targetEpoch - 60000 : 0;
+
+    const schedule: ScheduledLunchPush = {
+      id: sub.endpoint,
+      subscription: sub,
+      targetEpoch,
+      preAlertEpoch,
+      durationMinutes,
+      expectedEndTimeStr,
+      preAlertSent: preAlertEpoch === 0,
+      alarmSent: false,
+    };
+    scheduledLunchPushes.set(schedule.id, schedule);
+    persistPushSchedules();
+
+    return res.json({
+      ok: true,
+      targetEpoch,
+      preAlertEpoch,
+      expectedEndTimeStr,
+    });
+  });
+
+  app.post('/api/push/cancel-lunch', (req, res) => {
+    const endpoint = String(req.body?.endpoint || '').trim();
+    if (endpoint && scheduledLunchPushes.has(endpoint)) {
+      scheduledLunchPushes.delete(endpoint);
+      persistPushSchedules();
+    } else if (!endpoint) {
+      scheduledLunchPushes.clear();
+      persistPushSchedules();
+    }
+    return res.json({ ok: true });
+  });
+
+  app.post('/api/push/test-background', async (req, res) => {
+    const sub = req.body?.subscription as PushSubscriptionJSON | undefined;
+    const rawDelay = Number(req.body?.delaySeconds);
+    const delaySeconds = Number.isFinite(rawDelay) ? Math.min(30, Math.max(0, rawDelay)) : 5;
+
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+      return res.status(400).json({ ok: false, error: 'Assinatura Push ausente.' });
+    }
+
+    pushSubscriptions.set(sub.endpoint, sub);
+
+    if (delaySeconds === 0) {
+      const result = await sendWebPushNotification(
+        sub,
+        {
+          type: 'test',
+          title: '🔔 Push Real Recebido (App Fechado)',
+          body: 'O despertador Web Push está 100% ativo neste celular!',
+        },
+        vapidKeys
+      );
+      return res.status(result.ok ? 200 : 502).json(result);
+    }
+
+    setTimeout(() => {
+      void sendWebPushNotification(
+        sub,
+        {
+          type: 'test',
+          title: '🔔 Push Real (App Fechado) — PontoFácil',
+          body: 'Se você fechou ou minimizou o app, esta é a prova de que o alarme do almoço vai despertar o celular!',
+        },
+        vapidKeys
+      );
+    }, delaySeconds * 1000);
+
+    return res.json({ ok: true, scheduledInSeconds: delaySeconds });
+  });
+
+  app.get('/api/android-wrapper/download', (req, res) => {
+    const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
+    const host = String(req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000').split(',')[0].trim();
+    const defaultOrigin = `${proto}://${host}`;
+    const rawParam = typeof req.query.appUrl === 'string' ? req.query.appUrl.trim() : '';
+    const appUrl = /^https?:\/\/[a-z0-9.-]+(:\d+)?(\/[^\s"]*)?$/i.test(rawParam)
+      ? rawParam.replace(/\/+$/, '')
+      : defaultOrigin;
+
+    const zipBuffer = buildAndroidNativeWrapperZip(appUrl);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="PontoFacilAndroid.zip"');
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    return res.send(zipBuffer);
   });
 
   // ── PORTAL INTERACTIVE SESSION INIT ──────────────────────────────────────
@@ -1667,7 +1892,9 @@ async function startServer() {
       req.path === '/health' ||
       req.path.startsWith('/portal/') ||
       req.path === '/portal-embed' ||
-      req.path.startsWith('/ponto/');
+      req.path.startsWith('/ponto/') ||
+      req.path.startsWith('/push/') ||
+      req.path.startsWith('/android-wrapper/');
     if (!isInternalApi && (hasSidCookie || referer.includes('/autoatendimento') || referer.includes('/autenticacao') || referer.includes('/lg-p/'))) {
       return handlePortalProxy(req, res, 'pnb-prd-aa.lgcloud.com.br', req.originalUrl);
     }
