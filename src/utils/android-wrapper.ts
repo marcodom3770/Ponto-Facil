@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import zlib from 'node:zlib';
 
 export interface ZipEntryInput {
@@ -161,6 +163,8 @@ dependencies {
 
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="PontoFácil Pernambucanas"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
@@ -187,6 +191,7 @@ dependencies {
 
   const mainActivityKt = `package com.pontofacil.pernambucanas
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -194,6 +199,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -204,6 +210,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -227,6 +235,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         ensureNotificationChannel()
+        requestPostNotificationsIfNeeded()
 
         webView = WebView(this)
         setContentView(webView)
@@ -269,6 +278,22 @@ class MainActivity : AppCompatActivity() {
             }
             val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
+        }
+    }
+
+    private fun requestPostNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    100
+                )
+            }
         }
     }
 
@@ -388,24 +413,82 @@ class LunchAlarmReceiver : BroadcastReceiver() {
 }
 `;
 
+  const gradleProperties = `org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.enableJetifier=false
+kotlin.code.style=official
+`;
+
+  const githubActionYml = `name: Gerar APK PontoFacil
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Compilar APK Debug
+        run: |
+          if [ -f "PontoFacilAndroid/settings.gradle.kts" ]; then
+            cd PontoFacilAndroid
+          fi
+          gradle assembleDebug --no-daemon
+
+      - name: Publicar APK para Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: PontoFacil-APK
+          path: "**/app/build/outputs/apk/debug/app-debug.apk"
+`;
+
   const readmeTxt = `PontoFácil Pernambucanas — Projeto Android Nativo (WebView + Sobreposição de Apps)
 ================================================================================
 
 URL configurada automaticamente: ${safeUrl}
 
-O que este app nativo faz:
-1. Carrega exatamente o seu PontoFácil Web (${safeUrl}) em tela cheia, mantendo 100% da automação web no Portal Nossa Gente.
-2. Expõe a ponte JavaScript window.PontoFacilAndroid para agendar alarmes exatos no sistema Android (AlarmManager.setExactAndAllowWhileIdle).
-3. Ao conceder "Exibir sobre outros apps" (SYSTEM_ALERT_WINDOW), quando der o horário exato de volta do almoço, o LunchAlarmReceiver acorda o celular e abre o PontoFácil automaticamente por cima de qualquer outro app.
+IMPORTANTE: Este arquivo .zip contém o código-fonte do projeto Android, NÃO o .apk pronto.
+Você não consegue instalar o .zip diretamente no celular — primeiro é preciso gerar o .apk usando uma das 2 formas abaixo:
 
-Como gerar o APK no Android Studio:
-1. Extraia este arquivo .zip.
-2. Abra a pasta no Android Studio (File > Open).
-3. Aguarde o Gradle sincronizar e clique em Build > Build Bundle(s) / APK(s) > Build APK(s).
-4. Instale o app-debug.apk no celular e ative "Exibir sobre outros apps" nas configurações do app.
+OPÇÃO 1 — GERAR O APK GRÁTIS PELA NUVEM (SEM PRECISAR DE PC / ANDROID STUDIO):
+1. Extraia este .zip no celular ou computador.
+2. Crie um repositório gratuito no GitHub (github.com).
+3. Envie TODOS os arquivos de dentro da pasta PontoFacilAndroid (incluindo a pasta oculta .github) para o repositório.
+4. No GitHub, abra a aba "Actions" -> "Gerar APK PontoFacil" -> clique em "Run workflow".
+5. Aguarde ~2 minutos, clique no workflow concluído e baixe o arquivo "PontoFacil-APK" (contém o app-debug.apk pronto para instalar!).
+
+OPÇÃO 2 — GERAR O APK NO COMPUTADOR (ANDROID STUDIO):
+1. Extraia este arquivo .zip no computador.
+2. Abra a pasta "PontoFacilAndroid" no Android Studio (File > Open).
+3. Aguarde o Gradle sincronizar e clique em: Build > Build Bundle(s) / APK(s) > Build APK(s).
+4. Envie o "app-debug.apk" para o celular e toque para instalar.
+
+DEPOIS DE INSTALAR O APK NO CELULAR:
+- Abra as Configurações do Android > Apps > PontoFácil Pernambucanas > "Exibir sobre outros apps" e ATIVE a permissão.
+- Quando der o horário exato do almoço, o PontoFácil abrirá automaticamente por cima de qualquer outro app!
 `;
 
-  return buildZipArchive([
+  const zipEntries: ZipEntryInput[] = [
+    { name: 'PontoFacilAndroid/gradle.properties', content: gradleProperties },
     { name: 'PontoFacilAndroid/settings.gradle.kts', content: settingsGradle },
     { name: 'PontoFacilAndroid/build.gradle.kts', content: rootBuildGradle },
     { name: 'PontoFacilAndroid/app/build.gradle.kts', content: appBuildGradle },
@@ -418,6 +501,19 @@ Como gerar o APK no Android Studio:
       name: 'PontoFacilAndroid/app/src/main/java/com/pontofacil/pernambucanas/LunchAlarmReceiver.kt',
       content: receiverKt,
     },
+    { name: 'PontoFacilAndroid/.github/workflows/build-apk.yml', content: githubActionYml },
     { name: 'PontoFacilAndroid/README-ANDROID.txt', content: readmeTxt },
-  ]);
+  ];
+
+  // Include crisp launcher icon if available in public/
+  const iconCandidate = path.resolve(process.cwd(), 'public', 'pwa-192x192.png');
+  if (fs.existsSync(iconCandidate)) {
+    const iconBuf = fs.readFileSync(iconCandidate);
+    zipEntries.push({
+      name: 'PontoFacilAndroid/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png',
+      content: iconBuf,
+    });
+  }
+
+  return buildZipArchive(zipEntries);
 }

@@ -106,4 +106,6 @@ test('buildAndroidNativeWrapperZip creates valid PKZIP archive containing MainAc
   assert.ok(asLatin1.includes('AndroidManifest.xml'));
   assert.ok(asLatin1.includes('MainActivity.kt'));
   assert.ok(asLatin1.includes('LunchAlarmReceiver.kt'));
+  assert.ok(asLatin1.includes('gradle.properties'));
+  assert.ok(asLatin1.includes('.github/workflows/build-apk.yml'));
 });

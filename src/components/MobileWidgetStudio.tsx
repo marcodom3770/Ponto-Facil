@@ -17,6 +17,8 @@ import {
   BellRing,
   Download,
   AppWindow,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   PunchRecord,
@@ -66,6 +68,7 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [pushReady, setPushReady] = useState(false);
   const [isPushBusy, setIsPushBusy] = useState(false);
+  const [showAndroidGuide, setShowAndroidGuide] = useState(true);
 
   const payload = buildWidgetPayload(todayPunches, schedule, currentDate, privacyMode);
   const caps = detectWidgetCapabilities();
@@ -606,12 +609,15 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
                 )}
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <p className="text-xs pf-text-secondary leading-relaxed">
-                  O pacote contém um projeto Android Studio (Kotlin) configurado para este endereço com{' '}
-                  <code className="pf-text-accent">SYSTEM_ALERT_WINDOW</code> +{' '}
-                  <code className="pf-text-accent">AlarmManager</code>, mantendo 100% da automação web no Portal Nossa Gente e abrindo o app por cima de qualquer tela ao fim do almoço.
+                  Como este servidor web não possui o compilador Android SDK, não é possível gerar o{' '}
+                  <code className="pf-text-accent">.apk</code> pronto diretamente aqui. O{' '}
+                  <code className="pf-text-accent">.zip</code> traz o projeto Kotlin completo (com{' '}
+                  <code className="pf-text-accent">SYSTEM_ALERT_WINDOW</code> + compilador automático na nuvem) para você gerar o{' '}
+                  <code className="pf-text-accent">app-debug.apk</code> em poucos minutos.
                 </p>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <a
                     href={androidDownloadUrl}
@@ -621,7 +627,57 @@ export const MobileWidgetStudio: React.FC<MobileWidgetStudioProps> = ({
                     <Download className="w-3.5 h-3.5" />
                     <span>Baixar Projeto Android (.zip)</span>
                   </a>
+                  <button
+                    type="button"
+                    onClick={() => setShowAndroidGuide((v) => !v)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 pf-surface-muted border pf-border pf-control-radius text-xs font-bold hover:opacity-90 cursor-pointer"
+                  >
+                    <span>Como instalar após extrair</span>
+                    {showAndroidGuide ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
+
+                {showAndroidGuide && (
+                  <div className="pf-surface-muted pf-control-radius border pf-border p-3.5 space-y-2.5 text-[11px] pf-text-secondary leading-relaxed">
+                    <div className="font-bold pf-text-accent">
+                      Não tente instalar o .zip direto no celular — transforme em .apk assim:
+                    </div>
+                    <div>
+                      <strong>Pelo celular (grátis, sem PC, usando GitHub):</strong>
+                      <ol className="list-decimal list-inside space-y-0.5 mt-1">
+                        <li>Extraia o <code className="pf-text-accent">PontoFacilAndroid.zip</code>.</li>
+                        <li>
+                          Crie um repositório grátis no <strong>github.com</strong> e envie os arquivos da pasta{' '}
+                          <code className="pf-text-accent">PontoFacilAndroid</code> (incluindo <code className="pf-text-accent">.github</code>).
+                        </li>
+                        <li>
+                          Abra a aba <strong>Actions &gt; Gerar APK PontoFacil &gt; Run workflow</strong> e baixe o{' '}
+                          <strong>PontoFacil-APK</strong> (<code className="pf-text-accent">app-debug.apk</code>) pronto para instalar.
+                        </li>
+                      </ol>
+                    </div>
+                    <div>
+                      <strong>Pelo computador (Android Studio):</strong>
+                      <ol className="list-decimal list-inside space-y-0.5 mt-1">
+                        <li>
+                          Extraia o <code className="pf-text-accent">.zip</code> e abra a pasta no <strong>Android Studio</strong> (<em>File &gt; Open</em>).
+                        </li>
+                        <li>
+                          Clique em <strong>Build &gt; Build Bundle(s) / APK(s) &gt; Build APK(s)</strong>, envie o{' '}
+                          <code className="pf-text-accent">app-debug.apk</code> para o celular e toque para instalar.
+                        </li>
+                      </ol>
+                    </div>
+                    <div className="pt-1 border-t pf-border text-[10px] pf-text-muted">
+                      Após instalar o APK, abra as Configurações do Android &gt; Apps &gt; PontoFácil e ative{' '}
+                      <strong>&ldquo;Exibir sobre outros apps&rdquo;</strong>.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
